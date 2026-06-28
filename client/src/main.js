@@ -5,7 +5,6 @@ import './style.css';
 import { updateState, subscribe, getState } from './state.js';
 import { initRouter, registerStage, routeState, getStages, getCurrentStage } from './router.js';
 import { setMessageHandler, connect } from './network.js';
-import { getMockState } from './mock.js';
 
 // Stage renderers
 import { renderLobby } from './stages/lobby.js';
@@ -51,53 +50,26 @@ function boot() {
       if (currentState) {
         updateState({ ...currentState });
       }
+    } else if (data && data.type === 'rooms_list') {
+      // Only update the rooms list in the current state
+      const currentState = getState() || {};
+      updateState({ ...currentState, rooms: data.rooms });
     } else {
       updateState(data);
     }
   });
 
-  // ─── Dev Mode Controls ───
-  setupDevControls();
-
-  // Boot into lobby with mock data
-  updateState(getMockState('LOBBY'));
-}
-
-// ─── Dev Controls ───
-function setupDevControls() {
-  const devControls = document.getElementById('dev-controls');
-  const devPrev = document.getElementById('dev-prev');
-  const devNext = document.getElementById('dev-next');
-
-  // Show dev controls (always on for now since no backend)
-  if (devControls) devControls.style.display = '';
-
-  const stages = getStages();
-
-  if (devPrev) {
-    devPrev.addEventListener('click', () => {
-      const idx = stages.indexOf(getCurrentStage());
-      const prevIdx = (idx - 1 + stages.length) % stages.length;
-      updateState(getMockState(stages[prevIdx]));
-    });
-  }
-
-  if (devNext) {
-    devNext.addEventListener('click', () => {
-      const idx = stages.indexOf(getCurrentStage());
-      const nextIdx = (idx + 1) % stages.length;
-      updateState(getMockState(stages[nextIdx]));
-    });
-  }
-
-  // Keyboard shortcuts: [ and ] to cycle stages
-  document.addEventListener('keydown', (e) => {
-    if (e.key === '[' || e.key === 'ArrowLeft' && e.ctrlKey) {
-      devPrev?.click();
-    } else if (e.key === ']' || e.key === 'ArrowRight' && e.ctrlKey) {
-      devNext?.click();
-    }
-  });
+  // Initialize cleanly into the lobby stage
+  const cleanLobbyState = {
+    current_stage: 'LOBBY',
+    players: [],
+    my_hand: [],
+    table_cards: [],
+    prompt_data: null,
+    trick_winner: null,
+    winner: null
+  };
+  updateState(cleanLobbyState);
 }
 
 // ─── Start ───

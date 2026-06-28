@@ -1,6 +1,5 @@
 import { send } from '../network.js';
 import { updateState } from '../state.js';
-import { getMockState } from '../mock.js';
 
 /**
  * Render the GAME_OVER stage.
@@ -118,7 +117,16 @@ export function renderGameOver(state, container) {
     send({ action: 'return_menu' });
     
     // Instantly reset local client to lobby state
-    updateState(getMockState('LOBBY'));
+    const cleanLobbyState = {
+      current_stage: 'LOBBY',
+      players: [],
+      my_hand: [],
+      table_cards: [],
+      prompt_data: null,
+      trick_winner: null,
+      winner: null
+    };
+    updateState(cleanLobbyState);
   });
   overlay.appendChild(returnBtn);
 

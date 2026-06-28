@@ -234,7 +234,7 @@ export function renderBetting(state, container) {
 
   // 3. Hand Area (Bottom)
   const handContainer = document.createElement('div');
-  handContainer.className = `w-full flex justify-center items-center h-28 relative mt-2 ${isExchange && localPlayer.is_turn ? 'pointer-events-auto' : 'pointer-events-none'}`;
+  handContainer.className = `w-full flex justify-center items-center h-28 relative mt-2 fanned-hand ${isExchange && localPlayer.is_turn ? 'pointer-events-auto' : 'pointer-events-none'}`;
 
   // Sort hand
   const SUIT_ORDER = { clubs: 0, diamonds: 1, spades: 2, hearts: 3 };
@@ -255,7 +255,10 @@ export function renderBetting(state, container) {
     const offset = (idx - centerIdx) * 32;
     const rotation = (idx - centerIdx) * 2.5;
     
-    cardEl.style.transform = `translateX(calc(-50% + ${offset}px)) rotate(${rotation}deg)`;
+    // Set as CSS variables to allow beautiful hover / adjacent card transitions
+    cardEl.style.setProperty('--card-offset', `${offset}px`);
+    cardEl.style.setProperty('--card-rot', `${rotation}deg`);
+    
     cardEl.style.transformOrigin = '50% 120%';
     cardEl.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
 

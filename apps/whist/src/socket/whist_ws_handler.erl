@@ -116,6 +116,16 @@ handle_action(#{~"action" := ~"leave_room"}, #ws_state{room_id = RoomId} = State
     self() ! {send_state, json:encode(InitialState)},
     {ok, State#ws_state{game_pid = nil, room_id = nil}};
 
+%% @doc Client message: request list of available rooms
+handle_action(#{~"action" := ~"list_rooms"}, State) ->
+    Rooms = whist_room_manager:list_rooms(),
+    Response = #{
+        ~"type" => ~"rooms_list",
+        ~"rooms" => Rooms
+    },
+    self() ! {send_state, json:encode(Response)},
+    {ok, State};
+
 %% @doc Forward game-stage actions (e.g. bet, play_card, ready_next_round) to the session coordinator
 handle_action(#{~"action" := Action} = Msg, #ws_state{game_pid = GamePid} = State) when GamePid =/= nil ->
     gen_server:cast(GamePid, {action, Action, self(), Msg}),

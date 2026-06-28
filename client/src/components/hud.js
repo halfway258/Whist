@@ -158,6 +158,16 @@ export function renderHUD(state, container) {
       const cardContainer = document.createElement('div');
       cardContainer.className = 'relative h-10 w-full flex justify-center';
       
+      // Rotate fanned cards according to seat position
+      let baseRotation = 0;
+      if (i === 1) baseRotation = 90;
+      else if (i === 2) baseRotation = 180;
+      else if (i === 3) baseRotation = -90;
+      
+      if (baseRotation !== 0) {
+        cardContainer.style.transform = `rotate(${baseRotation}deg)`;
+      }
+      
       for (let c = 0; c < handSize; c++) {
         const cardBack = renderCardBack({ mini: true });
         cardBack.style.position = 'absolute';

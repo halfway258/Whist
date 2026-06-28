@@ -115,6 +115,29 @@ body {
   filter: grayscale(0.2);
 }
 
+/* ─── Fanned Hand & Interactivity ─── */
+.fanned-hand .game-card {
+  transform: translateX(calc(-50% + var(--card-offset, 0px))) rotate(var(--card-rot, 0deg));
+  transition: transform 0.25s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.25s ease, filter 0.2s ease, opacity 0.2s ease;
+}
+
+/* Hovering a card: lift it and expand */
+.fanned-hand .game-card.playable:hover {
+  transform: translateX(calc(-50% + var(--card-offset, 0px))) translateY(-24px) rotate(var(--card-rot, 0deg)) scale(1.12);
+  z-index: 50;
+  box-shadow: 0 12px 32px rgba(16, 185, 129, 0.4), 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Sibling immediately after the hovered card: shift right and twist slightly */
+.fanned-hand .game-card.playable:hover + .game-card {
+  transform: translateX(calc(-50% + var(--card-offset, 0px) + 20px)) rotate(calc(var(--card-rot, 0deg) + 6deg));
+}
+
+/* Sibling immediately before the hovered card: shift left and twist slightly */
+.fanned-hand .game-card.playable:has(+ .game-card:hover) {
+  transform: translateX(calc(-50% + var(--card-offset, 0px) - 20px)) rotate(calc(var(--card-rot, 0deg) - 6deg));
+}
+
 /* ─── Turn Glow ─── */
 .turn-glow {
   box-shadow: 0 0 16px rgba(16, 185, 129, 0.5), 0 0 32px rgba(16, 185, 129, 0.2);
@@ -316,6 +339,12 @@ body {
 
 .game-card.selected {
   transform: translateY(-24px) scale(1.05) !important;
+  box-shadow: 0 8px 24px rgba(245, 158, 11, 0.5) !important;
+  border: 2px solid #f59e0b !important;
+}
+
+.fanned-hand .game-card.selected {
+  transform: translateX(calc(-50% + var(--card-offset, 0px))) translateY(-24px) rotate(var(--card-rot, 0deg)) scale(1.05) !important;
   box-shadow: 0 8px 24px rgba(245, 158, 11, 0.5) !important;
   border: 2px solid #f59e0b !important;
 }

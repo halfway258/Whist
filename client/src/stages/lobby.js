@@ -1,13 +1,6 @@
 import { connect, send } from '../network.js';
 import { updateState, getState } from '../state.js';
-
-// Mock rooms for browser simulation (if not connected yet or for dev simulation)
-const MOCK_ROOMS = [
-  { id: 'room-1', name: 'Tel Aviv Open Championship', players: 3, maxPlayers: 4, hasPassword: true },
-  { id: 'room-2', name: 'Casual Friday Whist', players: 1, maxPlayers: 4, hasPassword: false },
-  { id: 'room-3', name: 'Elite Masters Room', players: 4, maxPlayers: 4, hasPassword: true },
-  { id: 'room-4', name: 'Beginners Welcome Room', players: 2, maxPlayers: 4, hasPassword: false }
-];
+import { startTutorial } from '../tutorial.js';
 
 /**
  * Render the LOBBY / Server Selection and Room Browser stage.
@@ -23,7 +16,7 @@ export function renderLobby(state, container) {
   if (players.length <= 1) {
     // If we have custom room list state or are viewing room browser
     if (state.view_stage === 'ROOM_LIST') {
-      renderRoomBrowser(container);
+      renderRoomBrowser(container, state);
     } else {
       renderServerSelection(container);
     }
@@ -56,6 +49,9 @@ function renderServerSelection(container) {
         <button id="btn-show-online" class="btn btn-secondary text-base py-3.5 flex justify-center items-center gap-2">
           <span>🌐</span> Online Multiplayer
         </button>
+        <button id="btn-tutorial" class="btn btn-secondary text-base py-3.5 flex justify-center items-center gap-2 border border-amber-500/25">
+          <span>📖</span> Learn Tutorial
+        </button>
       </div>
     </div>
   `;
@@ -64,6 +60,7 @@ function renderServerSelection(container) {
 
   const btnOffline = card.querySelector('#btn-offline');
   const btnShowOnline = card.querySelector('#btn-show-online');
+  const btnTutorial = card.querySelector('#btn-tutorial');
 
   btnOffline.addEventListener('click', () => {
     btnOffline.disabled = true;
@@ -83,11 +80,19 @@ function renderServerSelection(container) {
       const state = getState() || {};
       state.view_stage = 'ROOM_LIST';
       updateState(state);
-    }, 500);
+      
+      // Request the real list of rooms from the server
+      send({ action: 'list_rooms' });
+    }, 600);
+  });
+
+  btnTutorial.addEventListener('click', () => {
+    startTutorial();
   });
 }
 
-function renderRoomBrowser(container) {
+function renderRoomBrowser(container, state) {
+  const rooms = state.rooms || [];
   const card = document.createElement('div');
   card.className = 'glass p-8 max-w-2xl w-full mx-4 flex flex-col shadow-2xl relative z-10 max-h-[90vh] overflow-hidden';
 
@@ -98,14 +103,23 @@ function renderRoomBrowser(container) {
         <h2 class="text-2xl font-black text-white tracking-wide">Room Browser</h2>
         <p class="text-slate-400 text-xs mt-0.5">Select a room to play or spectate games</p>
       </div>
-      <button id="btn-create-room" class="btn btn-primary text-xs !py-2 !px-3 flex items-center gap-1.5">
-        <span>+</span> Create Room
-      </button>
+      <div class="flex gap-2">
+        <button id="btn-refresh-rooms" class="btn btn-secondary text-xs !py-2 !px-3 flex items-center gap-1.5">
+          🔄 Refresh
+        </button>
+        <button id="btn-create-room" class="btn btn-primary text-xs !py-2 !px-3 flex items-center gap-1.5">
+          <span>+</span> Create Room
+        </button>
+      </div>
     </div>
 
     <!-- Rooms list -->
     <div class="flex-1 overflow-y-auto pr-1 flex flex-col gap-3 min-h-[250px] max-h-[350px] mb-6" id="rooms-list-container">
-      ${MOCK_ROOMS.map(room => {
+      ${rooms.length === 0 ? `
+        <div class="text-center py-12 text-slate-500 font-medium">
+          No active rooms found. Click "Create Room" to start one!
+        </div>
+      ` : rooms.map(room => {
         const isFull = room.players >= room.maxPlayers;
         const playerBadgeColor = isFull ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
         
@@ -170,6 +184,7 @@ function renderRoomBrowser(container) {
   // Hook button events
   const btnBack = card.querySelector('#btn-browser-back');
   const btnCreate = card.querySelector('#btn-create-room');
+  const btnRefresh = card.querySelector('#btn-refresh-rooms');
   const modal = card.querySelector('#password-modal');
   const modalCancel = card.querySelector('#btn-modal-cancel');
   const modalSubmit = card.querySelector('#btn-modal-submit');
@@ -195,17 +210,10 @@ function renderRoomBrowser(container) {
       name: rName,
       password: rPass || null
     });
+  });
 
-    // Standalone demo simulation: add new room and refresh browser view
-    const newId = `room-${MOCK_ROOMS.length + 1}`;
-    MOCK_ROOMS.push({
-      id: newId,
-      name: rName,
-      players: 1,
-      maxPlayers: 4,
-      hasPassword: !!rPass
-    });
-    renderRoomBrowser(container);
+  btnRefresh.addEventListener('click', () => {
+    send({ action: 'list_rooms' });
   });
 
   // Wire Join and Spectate buttons
@@ -265,19 +273,6 @@ function submitJoinRoom(roomId, password, role) {
     password: password || null,
     role: role // 'player' or 'spectator'
   });
-
-  // Mock server reply for standalone client demo
-  console.log(`[Lobby] Joining room ${roomId} as ${role}...`);
-  setTimeout(() => {
-    const state = getState() || {};
-    state.is_spectator = role === 'spectator';
-    // Setup players array mock to trigger Waiting Room phase
-    state.players = [
-      { id: 'p1', name: 'You', score: 0, is_turn: false, cards_played: [], bet: null, status: '' },
-      { id: 'p2', name: 'Alice', score: 0, is_turn: false, cards_played: [], bet: null, status: '' }
-    ];
-    updateState(state);
-  }, 800);
 }
 
 function renderWaitingRoom(players, container, state) {
@@ -343,11 +338,12 @@ function renderWaitingRoom(players, container, state) {
     btnExit.disabled = true;
     send({ action: 'leave_room' });
 
-    // Mock reset state back to room browser
+    // Transition state back to room browser locally
     const state = getState() || {};
-    state.players = [];
-    state.is_spectator = false;
     state.view_stage = 'ROOM_LIST';
     updateState(state);
+    
+    // Request fresh room list
+    send({ action: 'list_rooms' });
   });
 }

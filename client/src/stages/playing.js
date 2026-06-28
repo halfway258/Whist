@@ -65,6 +65,16 @@ export function renderPlaying(state, container) {
             // Render the played card
             const cardSvg = renderCard(playedCard, { small: true });
             cardSvg.style.boxShadow = '0 6px 12px rgba(0,0,0,0.3)';
+            
+            // Rotate played card according to seat position
+            let rotation = 0;
+            if (seatIdx === 1) rotation = 90;
+            else if (seatIdx === 2) rotation = 180;
+            else if (seatIdx === 3) rotation = -90;
+            if (rotation !== 0) {
+              cardSvg.style.transform = `rotate(${rotation}deg)`;
+            }
+            
             cell.appendChild(cardSvg);
             
             // Add a small player initials badge below the card
@@ -128,7 +138,7 @@ export function renderPlaying(state, container) {
 
   // 2. Player Hand Area (Bottom)
   const handContainer = document.createElement('div');
-  handContainer.className = 'w-full flex justify-center items-center h-28 relative mt-2 pointer-events-auto';
+  handContainer.className = 'w-full flex justify-center items-center h-28 relative mt-2 pointer-events-auto fanned-hand';
 
   // Sort hand by alternating color order: Clubs, Diamonds, Spades, Hearts
   const SUIT_ORDER = { clubs: 0, diamonds: 1, spades: 2, hearts: 3 };
@@ -155,9 +165,12 @@ export function renderPlaying(state, container) {
     const offset = (idx - centerIdx) * 32;
     const rotation = (idx - centerIdx) * 2.5;
     
-    cardEl.style.transform = `translateX(calc(-50% + ${offset}px)) rotate(${rotation}deg)`;
+    // Set as CSS variables to allow beautiful hover / adjacent card transitions
+    cardEl.style.setProperty('--card-offset', `${offset}px`);
+    cardEl.style.setProperty('--card-rot', `${rotation}deg`);
+    
     cardEl.style.transformOrigin = '50% 120%';
-    cardEl.style.boxShadow = '0 4px-12px rgba(0,0,0,0.3)';
+    cardEl.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
 
     const playable = isOurTurn && (() => {
       if (tableCards.length === 0) return true;
