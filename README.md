@@ -1,2 +1,9 @@
-# Whist
-The classic card game 
+whist
+=====
+
+An OTP application
+
+Build
+-----
+
+    $ rebar3 compile
