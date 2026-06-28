@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Whist card game — play online or offline against bots" />
+  <title>Whist</title>
+  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+  <script type="module" crossorigin src="/assets/index-aUV5UCz6.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-C3fcKQ6E.css">
+</head>
+<body>
+  <div id="app">
+
+    <!-- ═══ Stage: LOBBY ═══ -->
+    <section id="stage-lobby" class="stage active flex-col items-center justify-center">
+    </section>
+
+    <!-- ═══ Stage: DEALING ═══ -->
+    <section id="stage-dealing" class="stage items-center justify-center">
+    </section>
+
+    <!-- ═══ Stage: BETTING ═══ -->
+    <section id="stage-betting" class="stage flex-col">
+    </section>
+
+    <!-- ═══ Stage: PLAYING ═══ -->
+    <section id="stage-playing" class="stage flex-col">
+    </section>
+
+    <!-- ═══ Stage: ROUND_END ═══ -->
+    <section id="stage-round-end" class="stage items-center justify-center">
+    </section>
+
+    <!-- ═══ Stage: GAME_OVER ═══ -->
+    <section id="stage-game-over" class="stage items-center justify-center flex-col">
+    </section>
+
+    <!-- ═══ Persistent HUD (visible during gameplay stages) ═══ -->
+    <div id="hud" class="absolute inset-0 pointer-events-none" style="display: none;">
+    </div>
+
+    <!-- ═══ Dev Controls (visible in dev mode) ═══ -->
+    <div id="dev-controls" class="fixed bottom-4 right-4 z-50" style="display: none;">
+      <div class="glass-sm p-3 flex gap-2 items-center pointer-events-auto">
+        <span class="text-xs text-slate-400 font-medium mr-1">DEV</span>
+        <button id="dev-prev" class="btn btn-secondary text-xs !py-1 !px-2">← Prev</button>
+        <span id="dev-stage-label" class="text-xs text-emerald-400 font-mono min-w-20 text-center">LOBBY</span>
+        <button id="dev-next" class="btn btn-secondary text-xs !py-1 !px-2">Next →</button>
+      </div>
+    </div>
+
+  </div>
+
+</body>
+</html>
