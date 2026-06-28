@@ -1,7 +1,6 @@
 whist
 =====
-
-An OTP application
+The classic card game
 
 Build
 -----
