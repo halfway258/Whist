@@ -19,6 +19,13 @@ import { renderHUD } from './components/hud.js';
 
 // ─── Boot ───
 function boot() {
+  // Load settings from local storage and apply them to the DOM
+  const textSize = localStorage.getItem('whist_text_size') || '18';
+  document.documentElement.style.fontSize = `${textSize}px`;
+
+  const feltBrightness = localStorage.getItem('whist_felt_brightness') || '100';
+  document.documentElement.style.setProperty('--table-brightness', parseFloat(feltBrightness) / 100);
+
   // Initialize router (caches DOM refs)
   initRouter();
 
@@ -54,6 +61,16 @@ function boot() {
       // Only update the rooms list in the current state
       const currentState = getState() || {};
       updateState({ ...currentState, rooms: data.rooms });
+    } else if (data && data.type === 'chat_message') {
+      // Dispatch a global event for the waiting room chat box
+      const event = new CustomEvent('whist_chat', { detail: data });
+      window.dispatchEvent(event);
+    } else if (data && data.type === 'room_closed') {
+      showToast("Room closed by host.");
+      const state = getState() || {};
+      state.players = [];
+      state.view_stage = 'ROOM_LIST';
+      updateState(state);
     } else {
       updateState(data);
     }

@@ -29,6 +29,7 @@ websocket_init(State) ->
 
 %% @doc Receives and decodes incoming JSON WebSocket frames from the client.
 websocket_handle({text, FrameData}, State) ->
+    log_server_interaction(io_lib:format("WS Received: ~s", [FrameData])),
     try
         Map = json:decode(FrameData),
         handle_action(Map, State)
@@ -42,6 +43,7 @@ websocket_handle(_Frame, State) ->
 
 %% @doc Receives Erlang process mailbox messages and pushes them down to the client as WebSocket frames.
 websocket_info({send_state, StateJson}, State) ->
+    log_server_interaction(io_lib:format("WS Sent: ~s", [StateJson])),
     {reply, {text, StateJson}, State};
 websocket_info(_Info, State) ->
     {ok, State}.
@@ -64,6 +66,10 @@ terminate(_Reason, _Req, _State) ->
 
 %% @doc Client message: create a new room
 %% Expected JSON: { "action": "create_room", "name": "Room Name", "password": null }
+handle_action(#{~"action" := ~"client_log", ~"message" := Msg}, State) ->
+    log_server_interaction(io_lib:format("Client Log: ~s", [Msg])),
+    {ok, State};
+
 handle_action(#{~"action" := ~"create_room", ~"name" := Name} = Msg, State) ->
     Password = maps:get(~"password", Msg, null),
     case whist_room_manager:create_room(Name, Password) of
@@ -142,3 +148,11 @@ send_error(Type, Reason) ->
         ~"reason" => io_lib:format("~p", [Reason])
     },
     self() ! {send_state, json:encode(ErrorMap)}.
+
+get_timestamp_str() ->
+    {{Year, Month, Day}, {Hour, Min, Sec}} = calendar:local_time(),
+    lists:flatten(io_lib:format("~4..0B-~2..0B-~2..0B ~2..0B:~2..0B:~2..0B", [Year, Month, Day, Hour, Min, Sec])).
+
+log_server_interaction(Msg) ->
+    LogLine = io_lib:format("~s [Server] ~s~n", [get_timestamp_str(), Msg]),
+    file:write_file("interactions.log", LogLine, [append]).

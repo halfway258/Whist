@@ -1,4 +1,5 @@
 import { send } from '../network.js';
+import { logInteraction } from '../logger.js';
 
 /**
  * Render the ROUND_END stage showing round results breakdown for Israeli Whist.
@@ -85,6 +86,7 @@ export function renderRoundEnd(state, container) {
   readyBtn.className = 'btn btn-primary text-base px-8 py-3 relative z-10 flex items-center gap-2';
   readyBtn.innerHTML = '<span>Next Round</span> <span>→</span>';
   readyBtn.addEventListener('click', () => {
+    logInteraction('Button Click: Ready for Next Round');
     readyBtn.disabled = true;
     readyBtn.textContent = 'Waiting for players...';
     send({ action: 'ready_next_round' });

@@ -1,5 +1,6 @@
 import { send } from '../network.js';
 import { updateState } from '../state.js';
+import { logInteraction } from '../logger.js';
 
 /**
  * Render the GAME_OVER stage.
@@ -110,6 +111,7 @@ export function renderGameOver(state, container) {
   returnBtn.textContent = 'Return to Lobby';
   
   returnBtn.addEventListener('click', () => {
+    logInteraction('Button Click: Return to Lobby from Game Over screen');
     returnBtn.disabled = true;
     returnBtn.textContent = 'Resetting...';
     

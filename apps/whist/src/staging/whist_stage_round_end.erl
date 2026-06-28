@@ -20,10 +20,8 @@ ready_next_round(PlayerId, State) ->
     },
     
     %% Determine if we can proceed
-    IsAllReady = case State#rules_state.mode of
-        offline -> lists:member(~"p1", NewReady);
-        online -> length(NewReady) =:= 4
-    end,
+    HumanPlayerIds = [maps:get(~"id", P) || P <- State#rules_state.players, maps:get(~"bot", P, false) =:= false],
+    IsAllReady = lists:all(fun(HId) -> lists:member(HId, NewReady) end, HumanPlayerIds),
     
     case IsAllReady of
         true ->
@@ -34,9 +32,11 @@ ready_next_round(PlayerId, State) ->
                     {ok, NewState#rules_state{stage = game_over, winner = Winner}};
                 false ->
                     %% Transition to dealing next round
+                    ClearedPlayers = [P#{~"status" => ~""} || P <- NewPlayers],
                     {ok, NewState#rules_state{
                         stage = dealing,
-                        round = State#rules_state.round + 1
+                        round = State#rules_state.round + 1,
+                        players = ClearedPlayers
                     }}
             end;
         false ->

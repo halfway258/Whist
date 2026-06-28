@@ -31,7 +31,11 @@ init([RoomId, Mode]) ->
 %% @doc Handles client connection joins.
 %% Expected Payload: {join, ConnPid, Role}
 %% Expected Output: ok | {error, Reason}
+%% @doc Handles client connection joins.
+%% Expected Payload: {join, ConnPid, Role}
+%% Expected Output: ok | {error, Reason}
 handle_call({join, ConnPid, Role}, _From, State) ->
+    whist_utils:log("whist_game (~s): Join requested by Pid: ~p, Role: ~s", [State#game_session_state.room_id, ConnPid, Role]),
     case Role of
         ~"spectator" ->
             NewSpecs = [ConnPid | State#game_session_state.spectators],
@@ -46,6 +50,7 @@ handle_call({join, ConnPid, Role}, _From, State) ->
             PlayersCount = length(whist_rules:players(State#game_session_state.rules_state)),
             case PlayersCount of
                 ?MAX_PLAYERS ->
+                    whist_utils:log("whist_game (~s): Room full, refusing join", [State#game_session_state.room_id]),
                     {reply, {error, room_full}, State};
                 _ ->
                     PlayerId = list_to_binary(io_lib:format("p~p", [PlayersCount + 1])),
@@ -53,7 +58,7 @@ handle_call({join, ConnPid, Role}, _From, State) ->
                         offline -> ~"You";
                         online -> list_to_binary(io_lib:format("Player ~p", [PlayersCount + 1]))
                     end,
-                    
+                    whist_utils:log("whist_game (~s): Assigning ID: ~s, Name: ~s", [State#game_session_state.room_id, PlayerId, Name]),
                     case whist_rules:join(PlayerId, Name, false, State#game_session_state.rules_state) of
                         {ok, NewRulesState} ->
                             NewConns = maps:put(PlayerId, ConnPid, State#game_session_state.connections),
@@ -68,6 +73,7 @@ handle_call({join, ConnPid, Role}, _From, State) ->
                             %% schedule the transition to the betting phase.
                             case whist_rules:stage(NewRulesState) of
                                 dealing ->
+                                    whist_utils:log("whist_game (~s): stage = dealing, scheduling start_betting", [State#game_session_state.room_id]),
                                     erlang:send_after(?DEALING_DELAY, self(), start_betting);
                                 _ ->
                                     ok
@@ -75,6 +81,7 @@ handle_call({join, ConnPid, Role}, _From, State) ->
                             
                             {reply, ok, NewState};
                         {error, Reason} ->
+                            whist_utils:log("whist_game (~s): whist_rules:join failed: ~p", [State#game_session_state.room_id, Reason]),
                             {reply, {error, Reason}, State}
                     end
             end
@@ -85,7 +92,7 @@ handle_call(_Request, _From, State) ->
 
 %% @doc Handles client disconnects and explicit actions.
 handle_cast({leave, ConnPid}, State) ->
-    %% Find if leaving connection was a spectator
+    whist_utils:log("whist_game (~s): leave request from Pid: ~p", [State#game_session_state.room_id, ConnPid]),
     case lists:member(ConnPid, State#game_session_state.spectators) of
         true ->
             NewSpecs = lists:delete(ConnPid, State#game_session_state.spectators),
@@ -95,14 +102,44 @@ handle_cast({leave, ConnPid}, State) ->
                 {ok, PlayerId} ->
                     case State#game_session_state.mode of
                         online ->
-                            %% Reset online lobby and notify remaining players
-                            {ok, NewRulesState} = whist_rules:leave(PlayerId, State#game_session_state.rules_state),
-                            NewState = State#game_session_state{
-                                rules_state = NewRulesState,
-                                connections = #{}
-                            },
-                            broadcast_state(NewState),
-                            {noreply, NewState};
+                            RulesState = State#game_session_state.rules_state,
+                            NewConns = maps:remove(PlayerId, State#game_session_state.connections),
+                            case maps:size(NewConns) of
+                                0 ->
+                                    %% No more human players left in the session! Terminate the session process!
+                                    whist_utils:log("whist_game (~s): No human players remaining. Stopping game process.", [State#game_session_state.room_id]),
+                                    {stop, normal, State};
+                                _ ->
+                                    %% There are still other human players connected!
+                                    case RulesState#rules_state.stage of
+                                        lobby ->
+                                            %% Remove the player from the lobby's players list
+                                            NewPlayers = lists:filter(
+                                                fun(P) -> maps:get(~"id", P) =/= PlayerId end,
+                                                RulesState#rules_state.players
+                                            ),
+                                            %% Update remaining player IDs contiguously and re-index connections
+                                            {UpdatedPlayers, UpdatedConns} = reindex_players_and_conns(NewPlayers, NewConns),
+                                            NewRulesState = RulesState#rules_state{players = UpdatedPlayers},
+                                            NewState = State#game_session_state{
+                                                rules_state = NewRulesState,
+                                                connections = UpdatedConns
+                                            },
+                                            broadcast_state(NewState),
+                                            {noreply, NewState};
+                                        _ ->
+                                            %% Game in progress: replace leaving player with a bot
+                                            NewRulesState = whist_rules:replace_with_bot(PlayerId, RulesState),
+                                            NewState = State#game_session_state{
+                                                rules_state = NewRulesState,
+                                                connections = NewConns
+                                            },
+                                            broadcast_state(NewState),
+                                            %% Triggers automated action if it is now the bot's turn
+                                            schedule_bot_action(NewRulesState),
+                                            {noreply, NewState}
+                                    end
+                            end;
                         offline ->
                             %% Stopping the process since offline user disconnected
                             {stop, normal, State}
@@ -110,6 +147,115 @@ handle_cast({leave, ConnPid}, State) ->
                 error ->
                     {noreply, State}
             end
+    end;
+
+%% @doc Handles room chat messages
+handle_cast({action, ~"chat", ConnPid, Msg}, State) ->
+    case find_player_id_by_conn(ConnPid, State#game_session_state.connections) of
+        {ok, PlayerId} ->
+            RulesState = State#game_session_state.rules_state,
+            Players = RulesState#rules_state.players,
+            PlayerName = case lists:search(fun(P) -> maps:get(~"id", P) =:= PlayerId end, Players) of
+                {value, P} -> maps:get(~"name", P);
+                false -> ~"Unknown"
+            end,
+            Message = maps:get(~"message", Msg, ~""),
+            ChatMsg = #{
+                ~"type" => ~"chat_message",
+                ~"player_name" => PlayerName,
+                ~"message" => Message
+            },
+            broadcast_json(ChatMsg, State),
+            {noreply, State};
+        error ->
+            %% Spectator chat
+            case lists:member(ConnPid, State#game_session_state.spectators) of
+                true ->
+                    Message = maps:get(~"message", Msg, ~""),
+                    ChatMsg = #{
+                        ~"type" => ~"chat_message",
+                        ~"player_name" => ~"Spectator",
+                        ~"message" => Message
+                    },
+                    broadcast_json(ChatMsg, State),
+                    {noreply, State};
+                false ->
+                    {noreply, State}
+            end
+    end;
+
+%% @doc Handles ready toggle in waiting room
+handle_cast({action, ~"ready_toggle", ConnPid, _Msg}, State) ->
+    case find_player_id_by_conn(ConnPid, State#game_session_state.connections) of
+        {ok, PlayerId} ->
+            RulesState = State#game_session_state.rules_state,
+            Players = RulesState#rules_state.players,
+            NewPlayers = lists:map(
+                fun(P) ->
+                    case maps:get(~"id", P) of
+                        PlayerId ->
+                            CurrentStatus = maps:get(~"status", P, ~""),
+                            NewStatus = case CurrentStatus of
+                                ~"Ready" -> ~"";
+                                _ -> ~"Ready"
+                            end,
+                            P#{~"status" => NewStatus};
+                        _ ->
+                            P
+                    end
+                end,
+                Players
+            ),
+            NewRulesState = RulesState#rules_state{players = NewPlayers},
+            NewState = State#game_session_state{rules_state = NewRulesState},
+            broadcast_state(NewState),
+            {noreply, NewState};
+        error ->
+            {noreply, State}
+    end;
+
+%% @doc Handles room closure by owner
+handle_cast({action, ~"close_room", ConnPid, _Msg}, State) ->
+    case find_player_id_by_conn(ConnPid, State#game_session_state.connections) of
+        {ok, ~"p1"} ->
+            %% Kick everyone back to lobby first
+            broadcast_json(#{~"type" => ~"room_closed"}, State),
+            {stop, normal, State};
+        _ ->
+            {noreply, State}
+    end;
+
+%% @doc Handles starting room early with bots by owner
+handle_cast({action, ~"start_game", ConnPid, _Msg}, State) ->
+    whist_utils:log("whist_game (~s): start_game early requested by Pid: ~p", [State#game_session_state.room_id, ConnPid]),
+    case find_player_id_by_conn(ConnPid, State#game_session_state.connections) of
+        {ok, ~"p1"} ->
+            RulesState = State#game_session_state.rules_state,
+            case RulesState#rules_state.stage of
+                lobby ->
+                    CurrentPlayers = RulesState#rules_state.players,
+                    NumPlayers = length(CurrentPlayers),
+                    whist_utils:log("whist_game (~s): starting game with ~p players. Filling with ~p bots.", [State#game_session_state.room_id, NumPlayers, 4 - NumPlayers]),
+                    BotsNeeded = 4 - NumPlayers,
+                    Bots = generate_bots(BotsNeeded, NumPlayers + 1),
+                    AllPlayers = CurrentPlayers ++ Bots,
+                    NewRulesState = RulesState#rules_state{
+                        players = AllPlayers,
+                        stage = dealing,
+                        round = 1
+                    },
+                    NewState = State#game_session_state{rules_state = NewRulesState},
+                    broadcast_state(NewState),
+                    whist_utils:log("whist_game (~s): Dealing phase started, scheduling start_betting", [State#game_session_state.room_id]),
+                    erlang:send_after(?DEALING_DELAY, self(), start_betting),
+                    {noreply, NewState};
+                _ ->
+                    whist_utils:log("whist_game (~s): start_game early ignored since stage is ~p", [State#game_session_state.room_id, RulesState#rules_state.stage]),
+                    {noreply, State}
+            end;
+        _ ->
+            whist_utils:log("whist_game (~s): start_game early ignored (sender is not p1)", [State#game_session_state.room_id]),
+            {noreply, State}
     end;
 
 %% Expected client actions forwarded from websocket:
@@ -132,8 +278,8 @@ handle_cast({action, Action, ConnPid, Msg}, State) ->
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
-%% @doc Handles timer-based bot actions and state animations.
 handle_info(start_betting, State) ->
+    whist_utils:log("whist_game (~s): start_betting event fired", [State#game_session_state.room_id]),
     {ok, ShuffledState} = whist_rules:deal(State#game_session_state.rules_state),
     {ok, BettingState} = whist_rules:start_betting(ShuffledState),
     NewState = State#game_session_state{rules_state = BettingState},
@@ -386,3 +532,55 @@ broadcast_state(State) ->
         end,
         State#game_session_state.spectators
     ).
+
+broadcast_json(JsonMap, State) ->
+    JsonStr = json:encode(JsonMap),
+    %% Send to all player connections
+    lists:foreach(
+        fun(ConnPid) ->
+            ConnPid ! {send_state, JsonStr}
+        end,
+        maps:values(State#game_session_state.connections)
+    ),
+    %% Send to all spectator connections
+    lists:foreach(
+        fun(SpecPid) ->
+            SpecPid ! {send_state, JsonStr}
+        end,
+        State#game_session_state.spectators
+    ).
+
+generate_bots(0, _) -> [];
+generate_bots(Count, Index) ->
+    BotId = <<~"p"/binary, (integer_to_binary(Index))/binary>>,
+    BotNames = [~"Alice", ~"Bob", ~"Carol", ~"David", ~"Eve"],
+    BotName = lists:nth(((Index - 1) rem length(BotNames)) + 1, BotNames),
+    Bot = #{
+        ~"id" => BotId,
+        ~"name" => <<BotName/binary, ~" (Bot)"/binary>>,
+        ~"score" => 0,
+        ~"tricks_taken" => 0,
+        ~"is_turn" => false,
+        ~"cards_played" => [],
+        ~"bet" => null,
+        ~"status" => ~"",
+        ~"bot" => true
+    },
+    [Bot | generate_bots(Count - 1, Index + 1)].
+
+reindex_players_and_conns(Players, Conns) ->
+    {UpdatedPlayers, _, UpdatedConns} = lists:foldl(
+        fun(P, {PAcc, Index, CAcc}) ->
+            OldId = maps:get(~"id", P),
+            NewId = <<~"p"/binary, (integer_to_binary(Index))/binary>>,
+            NewP = P#{~"id" => NewId},
+            NewCAcc = case maps:find(OldId, Conns) of
+                {ok, ConnPid} -> maps:put(NewId, ConnPid, CAcc);
+                error -> CAcc
+            end,
+            {PAcc ++ [NewP], Index + 1, NewCAcc}
+        end,
+        {[], 1, #{}},
+        Players
+    ),
+    {UpdatedPlayers, UpdatedConns}.

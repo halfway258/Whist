@@ -1,5 +1,6 @@
 import { renderCard } from '../components/cards.js';
 import { send } from '../network.js';
+import { logInteraction } from '../logger.js';
 
 /**
  * Render the PLAYING stage (card play loop).
@@ -162,7 +163,8 @@ export function renderPlaying(state, container) {
     
     // overlapping fan positioning
     const centerIdx = (totalCards - 1) / 2;
-    const offset = (idx - centerIdx) * 32;
+    const spacing = parseFloat(localStorage.getItem('whist_card_spacing') || '32');
+    const offset = (idx - centerIdx) * spacing;
     const rotation = (idx - centerIdx) * 2.5;
     
     // Set as CSS variables to allow beautiful hover / adjacent card transitions
@@ -186,6 +188,7 @@ export function renderPlaying(state, container) {
       
       // Hook up card click logic
       cardEl.addEventListener('click', () => {
+        logInteraction(`Card Play Click: Playing card (suit: "${card.suit}", value: ${card.value})`);
         // Disable hand inputs instantly to prevent double-click
         const allCards = handContainer.querySelectorAll('.game-card');
         allCards.forEach(c => {

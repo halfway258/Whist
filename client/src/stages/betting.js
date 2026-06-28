@@ -1,5 +1,6 @@
 import { renderCard } from '../components/cards.js';
 import { send } from '../network.js';
+import { logInteraction } from '../logger.js';
 
 /**
  * Render the BETTING stage.
@@ -82,6 +83,7 @@ export function renderBetting(state, container) {
       const confirmBtn = overlay.querySelector('#btn-confirm-exchange');
       confirmBtn.addEventListener('click', () => {
         if (selectedCards.length === 2) {
+          logInteraction(`Button Click: Confirm Exchange (cards: ${JSON.stringify(selectedCards)})`);
           // Disable overlay controls
           confirmBtn.disabled = true;
           overlay.querySelector('h3').textContent = 'Submitting...';
@@ -130,6 +132,7 @@ export function renderBetting(state, container) {
       
       suitButtons.forEach(btn => {
         btn.addEventListener('click', () => {
+          logInteraction(`Button Click: Select Trump Suit: "${btn.dataset.suit}"`);
           suitButtons.forEach(b => {
             b.className = b.className.replace('btn-gold', 'btn-secondary');
             if (!b.className.includes('btn-secondary')) {
@@ -152,6 +155,7 @@ export function renderBetting(state, container) {
 
       confirmBtn.addEventListener('click', () => {
         const takes = parseInt(slider.value, 10);
+        logInteraction(`Button Click: Confirm Suit Bid (takes: ${takes}, suit: "${selectedSuit}")`);
         confirmBtn.disabled = true;
         skipBtn.disabled = true;
         overlay.querySelector('h3').textContent = 'Submitting...';
@@ -159,6 +163,7 @@ export function renderBetting(state, container) {
       });
 
       skipBtn.addEventListener('click', () => {
+        logInteraction('Button Click: Skip Suit Bid');
         confirmBtn.disabled = true;
         skipBtn.disabled = true;
         overlay.querySelector('h3').textContent = 'Skipping...';
@@ -222,6 +227,7 @@ export function renderBetting(state, container) {
 
       confirmBtn.addEventListener('click', () => {
         const val = parseInt(slider.value, 10);
+        logInteraction(`Button Click: Confirm Takes Bid (takes: ${val})`);
         confirmBtn.disabled = true;
         slider.disabled = true;
         overlay.querySelector('h3').textContent = 'Confirming...';
@@ -252,7 +258,8 @@ export function renderBetting(state, container) {
     cardEl.style.left = '50%';
     
     const centerIdx = (totalCards - 1) / 2;
-    const offset = (idx - centerIdx) * 32;
+    const spacing = parseFloat(localStorage.getItem('whist_card_spacing') || '32');
+    const offset = (idx - centerIdx) * spacing;
     const rotation = (idx - centerIdx) * 2.5;
     
     // Set as CSS variables to allow beautiful hover / adjacent card transitions
@@ -269,11 +276,13 @@ export function renderBetting(state, container) {
         const isSelected = cardEl.classList.contains('selected');
         
         if (isSelected) {
+          logInteraction(`Card Click: Deselect card for exchange (suit: "${card.suit}", value: ${card.value})`);
           cardEl.classList.remove('selected');
           const index = selectedCards.findIndex(c => c.suit === card.suit && c.value === card.value);
           if (index > -1) selectedCards.splice(index, 1);
         } else {
           if (selectedCards.length < 2) {
+            logInteraction(`Card Click: Select card for exchange (suit: "${card.suit}", value: ${card.value})`);
             cardEl.classList.add('selected');
             selectedCards.push(card);
           }

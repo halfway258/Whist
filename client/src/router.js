@@ -1,3 +1,5 @@
+import { logInteraction } from './logger.js';
+
 // ─── Stage Router ───
 // Switches visible stage containers based on current_stage value.
 
@@ -42,6 +44,9 @@ export function routeState(state) {
   if (!state || !state.current_stage) return;
 
   const nextStage = state.current_stage;
+  if (currentStage !== nextStage) {
+    logInteraction(`Stage transitioned from ${currentStage || 'None'} to ${nextStage}`);
+  }
 
   // Show/hide stage containers
   for (const [name, el] of Object.entries(stageElements)) {

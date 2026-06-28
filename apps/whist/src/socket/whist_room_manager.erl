@@ -32,20 +32,28 @@ init([]) ->
 handle_call({create_room, Name, Password}, _From, State) ->
     NextId = State#room_manager_state.room_counter + 1,
     RoomId = <<~"room-"/binary, (integer_to_binary(NextId))/binary>>,
+    whist_utils:log("Room Manager: Creating Room: ~s (ID: ~s, Private: ~p)", [Name, RoomId, Password =/= null]),
     %% Start the game session server in online mode
-    {ok, GamePid} = whist_game:start_link(RoomId, online),
-    _Ref = monitor(process, GamePid),
-    Room = #room{
-        id = RoomId,
-        name = Name,
-        password = Password,
-        game_pid = GamePid,
-        players = []
-    },
-    NewRooms = maps:put(RoomId, Room, State#room_manager_state.rooms),
-    {reply, {ok, RoomId}, State#room_manager_state{rooms = NewRooms, room_counter = NextId}};
+    case whist_game:start_link(RoomId, online) of
+        {ok, GamePid} ->
+            whist_utils:log("Room Manager: Spawned whist_game process: ~p", [GamePid]),
+            _Ref = monitor(process, GamePid),
+            Room = #room{
+                id = RoomId,
+                name = Name,
+                password = Password,
+                game_pid = GamePid,
+                players = []
+            },
+            NewRooms = maps:put(RoomId, Room, State#room_manager_state.rooms),
+            {reply, {ok, RoomId}, State#room_manager_state{rooms = NewRooms, room_counter = NextId}};
+        {error, StartReason} ->
+            whist_utils:log("Room Manager: Failed to start whist_game process: ~p", [StartReason]),
+            {reply, {error, StartReason}, State}
+    end;
 
 handle_call({join_room, RoomId, Password, Role, ConnPid}, _From, State) ->
+    whist_utils:log("Room Manager: Join Request for room ~s, Role: ~s, Pid: ~p", [RoomId, Role, ConnPid]),
     case maps:find(RoomId, State#room_manager_state.rooms) of
         {ok, Room} ->
             case check_password(Password, Room#room.password) of
@@ -53,16 +61,20 @@ handle_call({join_room, RoomId, Password, Role, ConnPid}, _From, State) ->
                     %% Ask the game session server to register the player connection
                     case gen_server:call(Room#room.game_pid, {join, ConnPid, Role}) of
                         ok ->
+                            whist_utils:log("Room Manager: Successfully joined room ~s, game pid ~p", [RoomId, Room#room.game_pid]),
                             NewRoom = Room#room{players = [ConnPid | Room#room.players]},
                             NewRooms = maps:put(RoomId, NewRoom, State#room_manager_state.rooms),
                             {reply, {ok, Room#room.game_pid}, State#room_manager_state{rooms = NewRooms}};
                         {error, Reason} ->
+                            whist_utils:log("Room Manager: Game session refused join: ~p", [Reason]),
                             {reply, {error, Reason}, State}
                     end;
                 false ->
+                    whist_utils:log("Room Manager: Invalid password for room ~s", [RoomId]),
                     {reply, {error, invalid_password}, State}
             end;
         error ->
+            whist_utils:log("Room Manager: Room ID ~s not found", [RoomId]),
             {reply, {error, room_not_found}, State}
     end;
 
@@ -80,6 +92,7 @@ handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
 handle_cast({leave_room, RoomId, ConnPid}, State) ->
+    whist_utils:log("Room Manager: Leave Request for room ~s from Pid: ~p", [RoomId, ConnPid]),
     NewRooms = case maps:find(RoomId, State#room_manager_state.rooms) of
         {ok, Room} ->
             NewPlayers = lists:delete(ConnPid, Room#room.players),
@@ -88,6 +101,7 @@ handle_cast({leave_room, RoomId, ConnPid}, State) ->
             %% If room is empty, we clean it up.
             case NewPlayers of
                 [] ->
+                    whist_utils:log("Room Manager: Room ~s is empty, stopping game pid ~p", [RoomId, Room#room.game_pid]),
                     %% Stop the game process
                     catch gen_server:stop(Room#room.game_pid),
                     maps:remove(RoomId, State#room_manager_state.rooms);
@@ -95,6 +109,7 @@ handle_cast({leave_room, RoomId, ConnPid}, State) ->
                     maps:put(RoomId, Room#room{players = NewPlayers}, State#room_manager_state.rooms)
             end;
         error ->
+            whist_utils:log("Room Manager: Room ~s not found for leave request", [RoomId]),
             State#room_manager_state.rooms
     end,
     {noreply, State#room_manager_state{rooms = NewRooms}};
@@ -102,7 +117,8 @@ handle_cast({leave_room, RoomId, ConnPid}, State) ->
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
-handle_info({'DOWN', _Ref, process, Pid, _Reason}, State) ->
+handle_info({'DOWN', _Ref, process, Pid, Reason}, State) ->
+    whist_utils:log("Room Manager: whist_game process down: ~p, Reason: ~p", [Pid, Reason]),
     %% Clean up room if its game process crashed/stopped
     NewRooms = maps:filter(
         fun(_, R) -> R#room.game_pid =/= Pid end,

@@ -43,13 +43,17 @@ export function connect(url = 'ws://127.0.0.1:8080') {
     return;
   }
 
+  const activeSocket = socket;
+
   socket.addEventListener('open', () => {
+    if (socket !== activeSocket) return;
     console.log('[Network] Connected');
     reconnectDelay = 1000; // reset backoff
     setStatus('connected');
   });
 
   socket.addEventListener('message', (event) => {
+    if (socket !== activeSocket) return;
     try {
       const data = JSON.parse(event.data);
       if (onMessage) onMessage(data);
@@ -59,14 +63,18 @@ export function connect(url = 'ws://127.0.0.1:8080') {
   });
 
   socket.addEventListener('close', (event) => {
+    if (socket !== activeSocket) {
+      console.log('[Network] Discarded old socket close event ignored');
+      return;
+    }
     console.log(`[Network] Disconnected (code: ${event.code})`);
     setStatus('disconnected');
     scheduleReconnect(url);
   });
 
   socket.addEventListener('error', (err) => {
+    if (socket !== activeSocket) return;
     console.error('[Network] Error:', err);
-    // 'close' event will fire after this, triggering reconnect
   });
 }
 

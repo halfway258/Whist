@@ -23,7 +23,8 @@
     get_hand/2,
     exchange_cards/3,
     bot_bid/2,
-    bot_play_card/2
+    bot_play_card/2,
+    replace_with_bot/2
 ]).
 
 -export_type([rules_state/0]).
@@ -166,3 +167,18 @@ make_state_map(State, ViewerId) ->
         ~"trick_winner" => State#rules_state.trick_winner,
         ~"winner" => WinnerFormatted
     }.
+
+%% @doc Replaces a player with a bot in rules state.
+replace_with_bot(PlayerId, State) ->
+    NewPlayers = lists:map(
+        fun(P) ->
+            case maps:get(~"id", P) of
+                PlayerId ->
+                    P#{~"bot" => true, ~"name" => <<(maps:get(~"name", P))/binary, ~" (Bot)"/binary>>};
+                _ ->
+                    P
+            end
+        end,
+        State#rules_state.players
+    ),
+    State#rules_state{players = NewPlayers}.

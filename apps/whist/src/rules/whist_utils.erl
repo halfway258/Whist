@@ -11,7 +11,9 @@
     find_highest_score_player/1,
     rotate_players/2,
     capitalize_suit/1,
-    is_bot_turn/1
+    is_bot_turn/1,
+    log/1,
+    log/2
 ]).
 
 %% @doc Generates a standard deck of 52 cards (2 to 14, where 14 is Ace)
@@ -80,3 +82,14 @@ is_bot_turn(State) ->
         false ->
             false
     end.
+
+log(Msg) ->
+    log("~s", [Msg]).
+
+log(Fmt, Args) ->
+    {{Year, Month, Day}, {Hour, Min, Sec}} = calendar:local_time(),
+    Timestamp = lists:flatten(io_lib:format("~4..0B-~2..0B-~2..0B ~2..0B:~2..0B:~2..0B", [Year, Month, Day, Hour, Min, Sec])),
+    Content = io_lib:format(Fmt, Args),
+    LogLine = io_lib:format("~s [Server] ~s~n", [Timestamp, Content]),
+    file:write_file("interactions.log", LogLine, [append]),
+    io:format("~s [Server] ~s~n", [Timestamp, Content]).

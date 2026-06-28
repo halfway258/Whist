@@ -1,5 +1,7 @@
 import { getConnectionStatus } from '../network.js';
 import { renderCardBack } from './cards.js';
+import { toggleSettingsMenu } from './settings.js';
+import { logInteraction } from '../logger.js';
 
 /**
  * Render the Heads-Up Display (HUD) overlay.
@@ -15,9 +17,9 @@ export function renderHUD(state, container) {
   const connStatus = getConnectionStatus();
   const currentStage = state.current_stage || 'PLAYING';
 
-  // 1. Connection Status Dot (Top-Right)
+  // 1. Connection Status Dot and Menu button (Top-Right)
   const statusContainer = document.createElement('div');
-  statusContainer.className = 'absolute top-4 right-4 flex items-center gap-2 glass-sm px-3 py-1.5 pointer-events-auto z-20';
+  statusContainer.className = 'absolute top-4 right-4 flex items-center gap-3 pointer-events-auto z-20';
   
   let dotClass = 'status-dot disconnected';
   let statusText = 'Disconnected';
@@ -30,10 +32,21 @@ export function renderHUD(state, container) {
   }
 
   statusContainer.innerHTML = `
-    <span class="${dotClass}"></span>
-    <span class="text-xs font-semibold text-slate-300">${statusText}</span>
+    <div class="glass-sm px-3 py-1.5 flex items-center gap-2">
+      <span class="${dotClass}"></span>
+      <span class="text-xs font-semibold text-slate-300">${statusText}</span>
+    </div>
+    <button id="btn-settings" class="btn btn-secondary text-xs !py-1.5 !px-3 flex items-center gap-1">
+      ⚙️ Menu
+    </button>
   `;
   container.appendChild(statusContainer);
+
+  const btnSettings = statusContainer.querySelector('#btn-settings');
+  btnSettings.addEventListener('click', () => {
+    logInteraction('Button Click: Open Settings Menu');
+    toggleSettingsMenu();
+  });
 
   // 2. Round Info Badge (Top-Left)
   const roundBadge = document.createElement('div');
@@ -115,7 +128,7 @@ export function renderHUD(state, container) {
 
     // Card Body
     const cardBody = document.createElement('div');
-    cardBody.className = `glass-sm px-4 py-3 flex flex-col items-center min-w-32 border-2 transition-all duration-300 ${isTurn ? 'turn-glow border-emerald-500' : 'border-slate-700/30'}`;
+    cardBody.className = `glass-sm px-4 py-3 flex flex-col items-center min-w-32 border-2 transition-all duration-300 relative z-10 ${isTurn ? 'turn-glow border-emerald-500' : 'border-slate-700/30'}`;
 
     // Wording changes for Israeli Whist: Show tricks taken / bet in playing/round-end stages
     let tricksDisplay = '';
@@ -152,7 +165,7 @@ export function renderHUD(state, container) {
     const showHandSim = (currentStage === 'PLAYING' || currentStage === 'BETTING') && !isLocal;
     if (showHandSim && player.hand_size !== undefined) {
       const handSimContainer = document.createElement('div');
-      handSimContainer.className = 'relative flex justify-center items-center h-12 mt-3 w-full';
+      handSimContainer.className = 'relative flex justify-center items-center h-12 mt-3 w-full z-0';
       
       const handSize = player.hand_size;
       const cardContainer = document.createElement('div');
