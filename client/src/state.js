@@ -14,7 +14,8 @@ const listeners = new Set();
 export function updateState(newState) {
   const oldStage = gameState ? gameState.view_stage : 'SERVER_SELECT';
   const oldRooms = gameState ? gameState.rooms : [];
-  gameState = { view_stage: oldStage, rooms: oldRooms, ...newState };
+  const oldMode = gameState ? gameState.mode : null;
+  gameState = { view_stage: oldStage, rooms: oldRooms, mode: oldMode, ...newState };
   for (const fn of listeners) {
     try {
       fn(gameState);

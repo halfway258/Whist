@@ -81,6 +81,9 @@ function renderServerSelection(container) {
     btnOffline.disabled = true;
     btnOffline.textContent = 'Connecting...';
     connect(getWSUrl('offline'));
+    const state = getState() || {};
+    state.mode = 'offline';
+    updateState(state);
   });
 
   btnShowOnline.addEventListener('click', () => {
@@ -90,6 +93,10 @@ function renderServerSelection(container) {
     
     // Connect to server automatically
     connect(getWSUrl('online'));
+
+    const state = getState() || {};
+    state.mode = 'online';
+    updateState(state);
 
     const unsubscribe = onStatusChange((status) => {
       if (status === 'connected') {

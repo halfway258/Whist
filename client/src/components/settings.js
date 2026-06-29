@@ -23,7 +23,8 @@ export function toggleSettingsMenu() {
 
   const state = getState() || {};
   const currentStage = state.current_stage || 'LOBBY';
-  const localPlayer = state.players ? state.players[0] : null;
+  const players = state.players || [];
+  const localPlayer = players[0] || null;
   const isHost = localPlayer ? localPlayer.id === 'p1' : true; 
   const canEditRules = currentStage === 'LOBBY' && isHost;
 
@@ -176,9 +177,11 @@ export function toggleSettingsMenu() {
         <button id="btn-settings-close" class="btn btn-primary w-full py-2.5 text-xs font-bold">
           Close Settings
         </button>
-        <button id="btn-settings-exit" class="btn btn-danger w-full py-2.5 text-xs font-bold">
-          Exit Game
-        </button>
+        ${players.length > 0 ? `
+          <button id="btn-settings-exit" class="btn btn-danger w-full py-2.5 text-xs font-bold">
+            Exit Game
+          </button>
+        ` : ''}
       </div>
     </div>
   `;
@@ -341,27 +344,35 @@ export function toggleSettingsMenu() {
   });
 
   // Exit button
-  btnExit.addEventListener('click', () => {
-    logInteraction('Button Click: Exit Game');
-    showCustomConfirm('Are you sure you want to exit the match? You will be replaced by a bot.', () => {
-      logInteraction('Button Click: Confirm Exit Game');
-      menu.remove();
-      send({ action: 'leave_room' });
-      disconnect();
-      
-      const cleanLobbyState = {
-        current_stage: 'LOBBY',
-        players: [],
-        my_hand: [],
-        table_cards: [],
-        prompt_data: null,
-        trick_winner: null,
-        winner: null,
-        view_stage: 'SERVER_SELECT'
-      };
-      updateState(cleanLobbyState);
+  if (btnExit) {
+    btnExit.addEventListener('click', () => {
+      logInteraction('Button Click: Exit Game');
+      const isOffline = state.mode === 'offline';
+      const warningMsg = isOffline 
+        ? 'Game will not be saved. Still exit?' 
+        : 'Are you sure you want to exit the match? You will be replaced by a bot.';
+
+      showCustomConfirm(warningMsg, () => {
+        logInteraction('Button Click: Confirm Exit Game');
+        menu.remove();
+        send({ action: 'leave_room' });
+        disconnect();
+        
+        const cleanLobbyState = {
+          current_stage: 'LOBBY',
+          players: [],
+          my_hand: [],
+          table_cards: [],
+          prompt_data: null,
+          trick_winner: null,
+          winner: null,
+          view_stage: 'SERVER_SELECT',
+          mode: null
+        };
+        updateState(cleanLobbyState);
+      });
     });
-  });
+  }
 }
 
 function showCustomConfirm(message, callback) {
