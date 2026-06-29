@@ -1,5 +1,11 @@
 {
   "scripts": {
+    "compile:backend": "./scripts/compile-backend.sh",
+    "compile:client:dev": "./scripts/compile-client-dev.sh",
+    "compile:client:prod": "./scripts/compile-client-prod.sh",
+    "deploy:fly": "./scripts/deploy-fly.sh",
+    "run:local:dev": "./scripts/run-local-dev.sh",
+    "run:local:prod": "./scripts/run-local-prod.sh",
     "dev": "npm run dev --prefix client",
     "build": "npm run build --prefix client",
     "build:desktop": "npm run build:desktop --prefix client",

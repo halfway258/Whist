@@ -3,8 +3,7 @@
 
 -include("whist.hrl").
 
-%% API
--export([start_link/2]).
+-export([start_link/2, start_link/4, start_link/5]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
@@ -14,23 +13,62 @@
 %% ===================================================================
 
 start_link(RoomId, Mode) ->
-    gen_server:start_link(?MODULE, [RoomId, Mode], []).
+    start_link(RoomId, Mode, <<>>, null, undefined).
+
+start_link(RoomId, Mode, Name, Password) ->
+    start_link(RoomId, Mode, Name, Password, undefined).
+
+start_link(RoomId, Mode, Name, Password, SavedRulesState) ->
+    gen_server:start_link(?MODULE, [RoomId, Mode, Name, Password, SavedRulesState], []).
 
 %% ===================================================================
 %% gen_server Callbacks
 %% ===================================================================
 
-init([RoomId, Mode]) ->
-    RulesState = whist_rules:init(Mode),
-    {ok, #game_session_state{
-        room_id = RoomId,
-        mode = Mode,
-        rules_state = RulesState
-    }}.
+init([RoomId, Mode, Name, Password, SavedRulesState]) ->
+    RulesState = case SavedRulesState of
+        undefined -> whist_rules:init(Mode);
+        _ -> SavedRulesState
+    end,
+    
+    %% Initialize connections map for existing players
+    Connections = case SavedRulesState of
+        undefined -> #{};
+        _ ->
+            lists:foldl(fun(P, Acc) ->
+                PId = maps:get(~"id", P),
+                maps:put(PId, undefined, Acc)
+            end, #{}, whist_rules:players(SavedRulesState))
+    end,
 
-%% @doc Handles client connection joins.
-%% Expected Payload: {join, ConnPid, Role}
-%% Expected Output: ok | {error, Reason}
+    RestorationTimer = case {Mode, SavedRulesState} of
+        {online, undefined} -> undefined;
+        {online, _} ->
+            whist_utils:log("whist_game (~s): Restoration started. Starting 5-minute restoration timeout.", [RoomId]),
+            erlang:send_after(300000, self(), restoration_timeout);
+        _ ->
+            undefined
+    end,
+    
+    State = #game_session_state{
+        room_id = RoomId,
+        room_name = Name,
+        room_password = Password,
+        mode = Mode,
+        rules_state = RulesState,
+        connections = Connections,
+        disconnect_timers = #{},
+        restoration_timer = RestorationTimer
+    },
+    
+    %% Save initial state to database
+    case Mode of
+        online -> whist_db:save_room(RoomId, Name, Password, RulesState);
+        _ -> ok
+    end,
+    
+    {ok, State}.
+
 %% @doc Handles client connection joins.
 %% Expected Payload: {join, ConnPid, Role}
 %% Expected Output: ok | {error, Reason}
@@ -47,45 +85,101 @@ handle_call({join, ConnPid, Role}, _From, State) ->
             
             {reply, ok, NewState};
         _ ->
-            PlayersCount = length(whist_rules:players(State#game_session_state.rules_state)),
-            case PlayersCount of
-                ?MAX_PLAYERS ->
-                    whist_utils:log("whist_game (~s): Room full, refusing join", [State#game_session_state.room_id]),
-                    {reply, {error, room_full}, State};
-                _ ->
-                    PlayerId = list_to_binary(io_lib:format("p~p", [PlayersCount + 1])),
-                    Name = case State#game_session_state.mode of
-                        offline -> ~"You";
-                        online -> list_to_binary(io_lib:format("Player ~p", [PlayersCount + 1]))
+            RulesState = State#game_session_state.rules_state,
+            ExistingPlayers = whist_rules:players(RulesState),
+            Conns = State#game_session_state.connections,
+            
+            %% Cancel restoration timer if active on any first player reconnect/join
+            NewRestorationTimer = case State#game_session_state.restoration_timer of
+                undefined -> undefined;
+                ResRef ->
+                    whist_utils:log("whist_game (~s): Active join received, cancelling restoration timeout.", [State#game_session_state.room_id]),
+                    erlang:cancel_timer(ResRef),
+                    undefined
+            end,
+
+            %% Look for any seat with a dead/stale connection
+            case find_reclaimable_player(ExistingPlayers, Conns) of
+                {ok, ReclaimId} ->
+                    whist_utils:log("whist_game (~s): Reclaiming seat ~s for Pid ~p", [State#game_session_state.room_id, ReclaimId, ConnPid]),
+                    
+                    %% Cancel any active disconnect grace period timer
+                    NewTimers = case maps:find(ReclaimId, State#game_session_state.disconnect_timers) of
+                        {ok, TimerRef} ->
+                            erlang:cancel_timer(TimerRef),
+                            maps:remove(ReclaimId, State#game_session_state.disconnect_timers);
+                        error ->
+                            State#game_session_state.disconnect_timers
                     end,
-                    whist_utils:log("whist_game (~s): Assigning ID: ~s, Name: ~s", [State#game_session_state.room_id, PlayerId, Name]),
-                    case whist_rules:join(PlayerId, Name, false, State#game_session_state.rules_state) of
-                        {ok, NewRulesState} ->
-                            NewConns = maps:put(PlayerId, ConnPid, State#game_session_state.connections),
-                            NewState = State#game_session_state{
-                                rules_state = NewRulesState,
-                                connections = NewConns
-                            },
-                            
-                            broadcast_state(NewState),
-                            
-                            %% If we transitioned into the dealing phase (due to room full or offline mode starting),
-                            %% schedule the transition to the betting phase.
-                            case whist_rules:stage(NewRulesState) of
-                                dealing ->
-                                    whist_utils:log("whist_game (~s): stage = dealing, scheduling start_betting", [State#game_session_state.room_id]),
-                                    erlang:send_after(?DEALING_DELAY, self(), start_betting);
-                                _ ->
-                                    ok
+
+                    %% Set bot status back to false for reclaimed player
+                    NewPlayers = lists:map(fun(P) ->
+                        case maps:get(~"id", P) =:= ReclaimId of
+                            true -> P#{~"bot" => false};
+                            false -> P
+                        end
+                    end, ExistingPlayers),
+                    NewRulesState = RulesState#rules_state{players = NewPlayers},
+                    
+                    NewConns = maps:put(ReclaimId, ConnPid, Conns),
+                    NewState = State#game_session_state{
+                        rules_state = NewRulesState,
+                        connections = NewConns,
+                        disconnect_timers = NewTimers,
+                        restoration_timer = NewRestorationTimer
+                    },
+                    
+                    broadcast_state(NewState),
+                    {reply, ok, NewState};
+                none ->
+                    PlayersCount = length(ExistingPlayers),
+                    case PlayersCount of
+                        ?MAX_PLAYERS ->
+                            whist_utils:log("whist_game (~s): Room full, refusing join", [State#game_session_state.room_id]),
+                            {reply, {error, room_full}, State};
+                        _ ->
+                            PlayerId = list_to_binary(io_lib:format("p~p", [PlayersCount + 1])),
+                            Name = case State#game_session_state.mode of
+                                offline -> ~"You";
+                                online ->
+                                    case Role of
+                                        ~"player" -> list_to_binary(io_lib:format("Player ~p", [PlayersCount + 1]));
+                                        Username -> Username
+                                    end
                             end,
-                            
-                            {reply, ok, NewState};
-                        {error, Reason} ->
-                            whist_utils:log("whist_game (~s): whist_rules:join failed: ~p", [State#game_session_state.room_id, Reason]),
-                            {reply, {error, Reason}, State}
+                            whist_utils:log("whist_game (~s): Assigning ID: ~s, Name: ~s", [State#game_session_state.room_id, PlayerId, Name]),
+                            case whist_rules:join(PlayerId, Name, false, RulesState) of
+                                {ok, NewRulesState} ->
+                                    NewConns = maps:put(PlayerId, ConnPid, Conns),
+                                    NewState = State#game_session_state{
+                                        rules_state = NewRulesState,
+                                        connections = NewConns,
+                                        restoration_timer = NewRestorationTimer
+                                    },
+                                    
+                                    broadcast_state(NewState),
+                                    
+                                    %% If we transitioned into the dealing phase (due to room full or offline mode starting),
+                                    %% schedule the transition to the betting phase.
+                                    case whist_rules:stage(NewRulesState) of
+                                        dealing ->
+                                            whist_utils:log("whist_game (~s): stage = dealing, scheduling start_betting", [State#game_session_state.room_id]),
+                                            erlang:send_after(?DEALING_DELAY, self(), start_betting);
+                                        _ ->
+                                            ok
+                                    end,
+                                    
+                                    {reply, ok, NewState};
+                                {error, Reason} ->
+                                    whist_utils:log("whist_game (~s): whist_rules:join failed: ~p", [State#game_session_state.room_id, Reason]),
+                                    {reply, {error, Reason}, State}
+                            end
                     end
             end
     end;
+
+handle_call(get_rules_state, _From, State) ->
+    {reply, State#game_session_state.rules_state, State};
 
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
@@ -128,15 +222,16 @@ handle_cast({leave, ConnPid}, State) ->
                                             broadcast_state(NewState),
                                             {noreply, NewState};
                                         _ ->
-                                            %% Game in progress: replace leaving player with a bot
-                                            NewRulesState = whist_rules:replace_with_bot(PlayerId, RulesState),
+                                            %% Game in progress: start a 10s grace period timer
+                                            whist_utils:log("whist_game (~s): Player ~s disconnected in-game. Starting 10s grace period.", [State#game_session_state.room_id, PlayerId]),
+                                            TimerRef = erlang:send_after(10000, self(), {grace_period_expired, PlayerId}),
+                                            NewTimers = maps:put(PlayerId, TimerRef, State#game_session_state.disconnect_timers),
                                             NewState = State#game_session_state{
-                                                rules_state = NewRulesState,
-                                                connections = NewConns
+                                                connections = NewConns,
+                                                disconnect_timers = NewTimers
                                             },
+                                            %% We broadcast the state with connection removed so other players see it, but they are not a bot yet
                                             broadcast_state(NewState),
-                                            %% Triggers automated action if it is now the bot's turn
-                                            schedule_bot_action(NewRulesState),
                                             {noreply, NewState}
                                     end
                             end;
@@ -340,10 +435,49 @@ handle_info(bot_play, State) ->
             {noreply, State}
     end;
 
+handle_info({grace_period_expired, PlayerId}, State) ->
+    whist_utils:log("whist_game (~s): Grace period expired for player ~s.", [State#game_session_state.room_id, PlayerId]),
+    RulesState = State#game_session_state.rules_state,
+    
+    %% Double check if they still have no connection
+    Conns = State#game_session_state.connections,
+    IsDisconnected = case maps:find(PlayerId, Conns) of
+        error -> true;
+        {ok, undefined} -> true;
+        {ok, Pid} -> not (is_pid(Pid) andalso is_process_alive(Pid))
+    end,
+    
+    case IsDisconnected of
+        true ->
+            whist_utils:log("whist_game (~s): Player ~s has not reconnected. Bot taking over.", [State#game_session_state.room_id, PlayerId]),
+            NewRulesState = whist_rules:replace_with_bot(PlayerId, RulesState),
+            NewTimers = maps:remove(PlayerId, State#game_session_state.disconnect_timers),
+            NewState = State#game_session_state{
+                rules_state = NewRulesState,
+                disconnect_timers = NewTimers
+            },
+            broadcast_state(NewState),
+            schedule_bot_action(NewRulesState),
+            {noreply, NewState};
+        false ->
+            %% Player reconnected in time, ignore
+            whist_utils:log("whist_game (~s): Player ~s has already reconnected. Ignoring grace period expiration.", [State#game_session_state.room_id, PlayerId]),
+            NewTimers = maps:remove(PlayerId, State#game_session_state.disconnect_timers),
+            {noreply, State#game_session_state{disconnect_timers = NewTimers}}
+    end;
+
+handle_info(restoration_timeout, State) ->
+    whist_utils:log("whist_game (~s): Restoration timeout expired. No players reconnected. Closing room.", [State#game_session_state.room_id]),
+    {stop, normal, State};
+
 handle_info(_Info, State) ->
     {noreply, State}.
 
-terminate(_Reason, _State) ->
+terminate(_Reason, State) ->
+    case State#game_session_state.mode of
+        online -> whist_db:delete_room(State#game_session_state.room_id);
+        _ -> ok
+    end,
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
@@ -458,6 +592,10 @@ handle_player_action(~"ready_next_round", PlayerId, _Msg, State) ->
             case whist_rules:stage(NewRulesState) of
                 dealing ->
                     erlang:send_after(?DEALING_DELAY, self(), start_betting);
+                game_over ->
+                    %% Update player profiles in database!
+                    update_players_profiles(NewRulesState#rules_state.winner, whist_rules:players(NewRulesState)),
+                    ok;
                 _ ->
                     ok
             end,
@@ -529,6 +667,9 @@ schedule_bot_action(RulesState) ->
     end.
 
 broadcast_state(State) ->
+    %% Save state changes to Mnesia database
+    save_room_db(State),
+    
     Players = whist_rules:players(State#game_session_state.rules_state),
     lists:foreach(
         fun(P) ->
@@ -602,3 +743,51 @@ reindex_players_and_conns(Players, Conns) ->
         Players
     ),
     {UpdatedPlayers, UpdatedConns}.
+
+save_room_db(#game_session_state{mode = online, room_id = RoomId, room_name = Name, room_password = Password, rules_state = RulesState}) ->
+    whist_db:save_room(RoomId, Name, Password, RulesState);
+save_room_db(_) ->
+    ok.
+
+find_reclaimable_player([], _Conns) ->
+    none;
+find_reclaimable_player([Player | Rest], Conns) ->
+    PlayerId = maps:get(~"id", Player),
+    case maps:find(PlayerId, Conns) of
+        error ->
+            %% No connection registered for this player yet
+            {ok, PlayerId};
+        {ok, undefined} ->
+            %% Connection is undefined
+            {ok, PlayerId};
+        {ok, Pid} ->
+            case is_pid(Pid) andalso is_process_alive(Pid) of
+                false ->
+                    %% Process is dead
+                    {ok, PlayerId};
+                true ->
+                    %% Active process, check next player
+                    find_reclaimable_player(Rest, Conns)
+            end
+    end.
+
+update_players_profiles(WinnerId, Players) ->
+    lists:foreach(fun(P) ->
+        Name = maps:get(~"name", P),
+        PId = maps:get(~"id", P),
+        Score = maps:get(~"score", P),
+        case maps:get(~"bot", P, false) =:= false of
+            true -> %% Only update for human players
+                %% We check if a profile exists for this Name/Username
+                case mnesia:dirty_read(player_profile, Name) of
+                    [_] ->
+                        IsWinner = PId =:= WinnerId,
+                        whist_db:update_profile_stats(Name, IsWinner, Score),
+                        whist_utils:log("whist_game: Updated profile stats for user ~s (winner = ~p)", [Name, IsWinner]);
+                    _ ->
+                        ok
+                end;
+            false ->
+                ok
+        end
+    end, Players).

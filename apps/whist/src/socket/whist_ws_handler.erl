@@ -70,12 +70,49 @@ handle_action(#{~"action" := ~"client_log", ~"message" := Msg}, State) ->
     log_server_interaction(io_lib:format("Client Log: ~s", [Msg])),
     {ok, State};
 
+handle_action(#{~"action" := ~"register", ~"username" := Username, ~"password" := Password}, State) ->
+    Response = case whist_db:register_profile(Username, Password) of
+        ok ->
+            #{~"type" => ~"register_response", ~"status" => ~"ok"};
+        {error, Reason} ->
+            #{~"type" => ~"register_response", ~"status" => ~"error", ~"reason" => list_to_binary(io_lib:format("~p", [Reason]))}
+    end,
+    self() ! {send_state, json:encode(Response)},
+    {ok, State};
+
+handle_action(#{~"action" := ~"login", ~"username" := Username, ~"password" := Password}, State) ->
+    case whist_db:login_profile(Username, Password) of
+        {ok, Profile} ->
+            Response = #{
+                ~"type" => ~"login_response",
+                ~"status" => ~"ok",
+                ~"username" => Profile#player_profile.username,
+                ~"games_played" => Profile#player_profile.games_played,
+                ~"games_won" => Profile#player_profile.games_won,
+                ~"total_score" => Profile#player_profile.total_score
+            },
+            self() ! {send_state, json:encode(Response)},
+            {ok, State#ws_state{username = Username}};
+        {error, Reason} ->
+            Response = #{
+                ~"type" => ~"login_response",
+                ~"status" => ~"error",
+                ~"reason" => list_to_binary(io_lib:format("~p", [Reason]))
+            },
+            self() ! {send_state, json:encode(Response)},
+            {ok, State}
+    end;
+
 handle_action(#{~"action" := ~"create_room", ~"name" := Name} = Msg, State) ->
     Password = maps:get(~"password", Msg, null),
+    Role = case State#ws_state.username of
+        null -> ~"player";
+        User -> User
+    end,
     case whist_room_manager:create_room(Name, Password) of
         {ok, RoomId} ->
             %% Automatically join the player to the room they created
-            case whist_room_manager:join_room(RoomId, Password, ~"player", self()) of
+            case whist_room_manager:join_room(RoomId, Password, Role, self()) of
                 {ok, GamePid} ->
                     {ok, State#ws_state{game_pid = GamePid, room_id = RoomId}};
                 {error, Reason} ->
@@ -91,7 +128,15 @@ handle_action(#{~"action" := ~"create_room", ~"name" := Name} = Msg, State) ->
 %% Expected JSON: { "action": "join_room", "room_id": "room-1", "password": null, "role": "player" }
 handle_action(#{~"action" := ~"join_room", ~"room_id" := RoomId} = Msg, State) ->
     Password = maps:get(~"password", Msg, null),
-    Role = maps:get(~"role", Msg, ~"player"),
+    RoleInput = maps:get(~"role", Msg, ~"player"),
+    Role = case RoleInput of
+        ~"spectator" -> ~"spectator";
+        _ ->
+            case State#ws_state.username of
+                null -> ~"player";
+                User -> User
+            end
+    end,
     case whist_room_manager:join_room(RoomId, Password, Role, self()) of
         {ok, GamePid} ->
             {ok, State#ws_state{game_pid = GamePid, room_id = RoomId}};

@@ -42,10 +42,14 @@
 %% @doc The gen_server state record for whist_game.erl (game session coordinator)
 -record(game_session_state, {
     room_id :: binary(),
+    room_name = <<>> :: binary(),
+    room_password = null :: binary() | null,
     mode :: offline | online,
     rules_state :: #rules_state{},
     connections = #{} :: #{binary() => pid()},
-    spectators = [] :: [pid()]
+    spectators = [] :: [pid()],
+    disconnect_timers = #{} :: #{binary() => reference()},
+    restoration_timer = undefined :: reference() | undefined
 }).
 
 %% @doc The room record used by whist_room_manager.erl
@@ -55,6 +59,23 @@
     password :: binary() | null,
     game_pid :: pid(),
     players = [] :: [pid()]
+}).
+
+%% @doc Database record for persistent rooms in Mnesia
+-record(room_db, {
+    id :: binary(),
+    name :: binary(),
+    password :: binary() | null,
+    rules_state :: #rules_state{}
+}).
+
+%% @doc Database record for player profiles
+-record(player_profile, {
+    username :: binary(),
+    password_hash :: binary(),
+    games_played = 0 :: integer(),
+    games_won = 0 :: integer(),
+    total_score = 0 :: integer()
 }).
 
 %% @doc The gen_server state record for whist_room_manager.erl
@@ -67,5 +88,6 @@
 -record(ws_state, {
     game_pid = nil :: pid() | nil,
     room_id = nil :: binary() | nil,
-    mode = online :: offline | online
+    mode = online :: offline | online,
+    username = null :: binary() | null
 }).

@@ -26,7 +26,7 @@ start(_StartType, _StartArgs) ->
         ]}
     ]),
     {ok, _} = cowboy:start_clear(whist_http_listener,
-        [{port, Port}],
+        [{port, Port}, {ip, {0,0,0,0}}],
         #{env => #{dispatch => Dispatch}}
     ),
     whist_sup:start_link().

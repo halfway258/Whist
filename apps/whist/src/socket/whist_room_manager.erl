@@ -27,14 +27,54 @@ list_rooms() ->
 %% gen_server callbacks
 
 init([]) ->
-    {ok, #room_manager_state{}}.
+    ok = whist_db:init(),
+    %% Load existing rooms from Mnesia
+    SavedRooms = whist_db:load_rooms(),
+    RoomsMap = lists:foldl(fun(R, Acc) ->
+        RoomId = R#room_db.id,
+        Name = R#room_db.name,
+        Password = R#room_db.password,
+        SavedRulesState = R#room_db.rules_state,
+        
+        whist_utils:log("Room Manager: Restoring room ~s (~s) from database", [RoomId, Name]),
+        
+        case whist_game:start_link(RoomId, online, Name, Password, SavedRulesState) of
+            {ok, GamePid} ->
+                _Ref = monitor(process, GamePid),
+                RoomRecord = #room{
+                    id = RoomId,
+                    name = Name,
+                    password = Password,
+                    game_pid = GamePid,
+                    players = [] %% Connections will join on reconnect
+                },
+                maps:put(RoomId, RoomRecord, Acc);
+            {error, Reason} ->
+                whist_utils:log("Room Manager: Failed to restore room ~s: ~p", [RoomId, Reason]),
+                Acc
+        end
+    end, #{}, SavedRooms),
+    
+    %% Compute room counter from restored room IDs
+    RoomCounter = lists:foldl(fun(R, Max) ->
+        case binary:split(R#room_db.id, <<"-">>) of
+            [_, IdBin] ->
+                try
+                    erlang:max(Max, binary_to_integer(IdBin))
+                catch _:_ -> Max
+                end;
+            _ -> Max
+        end
+    end, 0, SavedRooms),
+    
+    {ok, #room_manager_state{rooms = RoomsMap, room_counter = RoomCounter}}.
 
 handle_call({create_room, Name, Password}, _From, State) ->
     NextId = State#room_manager_state.room_counter + 1,
     RoomId = <<~"room-"/binary, (integer_to_binary(NextId))/binary>>,
     whist_utils:log("Room Manager: Creating Room: ~s (ID: ~s, Private: ~p)", [Name, RoomId, Password =/= null]),
-    %% Start the game session server in online mode
-    case whist_game:start_link(RoomId, online) of
+    %% Start the game session server in online mode with name and password
+    case whist_game:start_link(RoomId, online, Name, Password) of
         {ok, GamePid} ->
             whist_utils:log("Room Manager: Spawned whist_game process: ~p", [GamePid]),
             _Ref = monitor(process, GamePid),
@@ -62,7 +102,11 @@ handle_call({join_room, RoomId, Password, Role, ConnPid}, _From, State) ->
                     case gen_server:call(Room#room.game_pid, {join, ConnPid, Role}) of
                         ok ->
                             whist_utils:log("Room Manager: Successfully joined room ~s, game pid ~p", [RoomId, Room#room.game_pid]),
-                            NewRoom = Room#room{players = [ConnPid | Room#room.players]},
+                            NewPlayers = case lists:member(ConnPid, Room#room.players) of
+                                true -> Room#room.players;
+                                false -> [ConnPid | Room#room.players]
+                            end,
+                            NewRoom = Room#room{players = NewPlayers},
                             NewRooms = maps:put(RoomId, NewRoom, State#room_manager_state.rooms),
                             {reply, {ok, Room#room.game_pid}, State#room_manager_state{rooms = NewRooms}};
                         {error, Reason} ->
@@ -98,10 +142,14 @@ handle_cast({leave_room, RoomId, ConnPid}, State) ->
             NewPlayers = lists:delete(ConnPid, Room#room.players),
             %% Notify game of leave
             gen_server:cast(Room#room.game_pid, {leave, ConnPid}),
-            %% If room is empty, we clean it up.
-            case NewPlayers of
-                [] ->
-                    whist_utils:log("Room Manager: Room ~s is empty, stopping game pid ~p", [RoomId, Room#room.game_pid]),
+            %% If room is empty, we check if the game has started.
+            %% If it is still in the lobby, we clean it up.
+            %% If it has started, we keep the process alive so players can reconnect!
+            RulesState = gen_server:call(Room#room.game_pid, get_rules_state),
+            IsLobby = RulesState#rules_state.stage =:= lobby,
+            case {NewPlayers, IsLobby} of
+                {[], true} ->
+                    whist_utils:log("Room Manager: Room ~s is empty in lobby, stopping game pid ~p", [RoomId, Room#room.game_pid]),
                     %% Stop the game process
                     catch gen_server:stop(Room#room.game_pid),
                     maps:remove(RoomId, State#room_manager_state.rooms);
