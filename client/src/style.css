@@ -351,3 +351,79 @@ body {
   border: 2px solid #f59e0b !important;
 }
 
+/* ─── Light Theme Styles ─── */
+body.light-theme {
+  background: linear-gradient(145deg, #f1f5f9 0%, #cbd5e1 40%, #94a3b8 100%);
+  color: #0f172a;
+  --color-felt: #1b5e20;
+  --color-felt-light: #4caf50;
+  --color-glass: rgba(255, 255, 255, 0.75);
+  --color-glass-border: rgba(15, 23, 42, 0.12);
+  --color-gold: #b45309;
+  --color-gold-dim: #f59e0b;
+}
+
+body.light-theme .glass,
+body.light-theme .glass-sm {
+  background: var(--color-glass);
+  border-color: var(--color-glass-border);
+  color: #0f172a;
+}
+
+body.light-theme .text-slate-400 {
+  color: #334155 !important;
+}
+
+body.light-theme .text-slate-300 {
+  color: #1e293b !important;
+}
+
+body.light-theme .text-slate-500 {
+  color: #475569 !important;
+}
+
+body.light-theme .text-white {
+  color: #0f172a !important;
+}
+
+body.light-theme .bg-slate-950\/80 {
+  background-color: rgba(241, 245, 249, 0.9) !important;
+}
+
+body.light-theme .bg-slate-950\/50 {
+  background-color: rgba(255, 255, 255, 0.6) !important;
+}
+
+body.light-theme .border-slate-800 {
+  border-color: rgba(148, 163, 184, 0.4) !important;
+}
+
+body.light-theme .border-slate-800\/80 {
+  border-color: rgba(148, 163, 184, 0.4) !important;
+}
+
+body.light-theme .border-slate-700\/30 {
+  border-color: rgba(148, 163, 184, 0.3) !important;
+}
+
+body.light-theme .input {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(148, 163, 184, 0.5);
+  color: #0f172a;
+}
+
+body.light-theme .input:focus {
+  border-color: #10b981;
+}
+
+body.light-theme .btn-secondary {
+  background: rgba(241, 245, 249, 0.8);
+  color: #334155;
+  border-color: rgba(148, 163, 184, 0.5);
+}
+
+body.light-theme .btn-secondary:hover {
+  background: rgba(226, 232, 240, 0.8);
+}
+
+

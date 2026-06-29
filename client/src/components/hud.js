@@ -49,35 +49,38 @@ export function renderHUD(state, container) {
   });
 
   // 2. Round Info Badge (Top-Left)
-  const roundBadge = document.createElement('div');
-  roundBadge.className = 'absolute top-4 left-4 glass-sm px-4 py-2 flex flex-col justify-center pointer-events-auto z-20';
-  
-  const playStyleText = gameStats.play_style ? ` | Play: ${gameStats.play_style}` : '';
-  const biddingStageText = gameStats.bidding_stage && currentStage === 'BETTING' ? ` (${gameStats.bidding_stage})` : '';
-  
-  function getSuitSymbol(suit) {
-    switch(suit) {
-      case 'spades': return '♠';
-      case 'hearts': return '♥';
-      case 'diamonds': return '♦';
-      case 'clubs': return '♣';
-      default: return '';
-    }
+  const showRoundStats = localStorage.getItem('whist_show_round_stats') !== 'false';
+  if (showRoundStats) {
+    const roundBadge = document.createElement('div');
+    roundBadge.className = 'absolute top-4 left-4 glass-sm px-4 py-2 flex flex-col justify-center pointer-events-auto z-20';
+    
+    const playStyleText = gameStats.play_style ? ` | Play: ${gameStats.play_style}` : '';
+    const biddingStageText = gameStats.bidding_stage && currentStage === 'BETTING' ? ` (${gameStats.bidding_stage})` : '';
+    
+    const getSuitSymbol = (suit) => {
+      switch(suit) {
+        case 'spades': return '♠';
+        case 'hearts': return '♥';
+        case 'diamonds': return '♦';
+        case 'clubs': return '♣';
+        default: return '';
+      }
+    };
+
+    const capitalize = (str) => {
+      if (!str) return '';
+      return str.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    };
+
+    const trumpText = gameStats.trump_suit && gameStats.trump_suit !== 'no_trump' ? ` | Trump: ${capitalize(gameStats.trump_suit)} ${getSuitSymbol(gameStats.trump_suit)}` : (gameStats.trump_suit === 'no_trump' ? ' | Trump: NT' : '');
+
+    roundBadge.innerHTML = `
+      <div class="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Israeli Whist${playStyleText}${trumpText}</div>
+      <div class="text-xl font-black text-white font-mono leading-none mt-1">Round ${gameStats.round}${biddingStageText}</div>
+      <div class="text-[10px] text-amber-400 font-semibold mt-1">Target: ${gameStats.target_score}</div>
+    `;
+    container.appendChild(roundBadge);
   }
-
-  function capitalize(str) {
-    if (!str) return '';
-    return str.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-  }
-
-  const trumpText = gameStats.trump_suit && gameStats.trump_suit !== 'no_trump' ? ` | Trump: ${capitalize(gameStats.trump_suit)} ${getSuitSymbol(gameStats.trump_suit)}` : (gameStats.trump_suit === 'no_trump' ? ' | Trump: NT' : '');
-
-  roundBadge.innerHTML = `
-    <div class="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Israeli Whist${playStyleText}${trumpText}</div>
-    <div class="text-xl font-black text-white font-mono leading-none mt-1">Round ${gameStats.round}${biddingStageText}</div>
-    <div class="text-[10px] text-amber-400 font-semibold mt-1">Target: ${gameStats.target_score}</div>
-  `;
-  container.appendChild(roundBadge);
 
   // 3. Render 4 Players
   // Bottom: 0, Left: 1, Top: 2, Right: 3
@@ -162,7 +165,8 @@ export function renderHUD(state, container) {
     playerEl.appendChild(cardBody);
 
     // Render opponent hand simulation if in PLAYING or BETTING stage
-    const showHandSim = (currentStage === 'PLAYING' || currentStage === 'BETTING') && !isLocal;
+    const showOppCards = localStorage.getItem('whist_show_opp_cards') !== 'false';
+    const showHandSim = showOppCards && (currentStage === 'PLAYING' || currentStage === 'BETTING') && !isLocal;
     if (showHandSim && player.hand_size !== undefined) {
       const handSimContainer = document.createElement('div');
       handSimContainer.className = 'relative flex justify-center items-center h-12 mt-3 w-full z-0';

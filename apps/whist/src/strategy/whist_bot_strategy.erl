@@ -30,13 +30,28 @@ bot_play_card(BotId, State) ->
             TableCards = State#rules_state.table_cards,
             Playable = get_playable_cards(Hand, TableCards),
             
-            CardToPlay = case TableCards of
-                [] ->
-                    %% Bot is leading the trick
-                    lead_trick(Playable, TricksNeeded, TrumpSuit);
+            BotDifficulty = maps:get(~"bot_difficulty", State#rules_state.settings, ~"hard"),
+            CardToPlay = case BotDifficulty of
+                ~"easy" ->
+                    case rand:uniform(10) =< 7 of
+                        true ->
+                            ShuffledPlayable = whist_utils:shuffle(Playable),
+                            lists:nth(1, ShuffledPlayable);
+                        false ->
+                            case TableCards of
+                                [] -> lead_trick(Playable, TricksNeeded, TrumpSuit);
+                                _ -> follow_trick(BotId, Playable, TableCards, TricksNeeded, TrumpSuit)
+                            end
+                    end;
                 _ ->
-                    %% Bot is following the trick
-                    follow_trick(BotId, Playable, TableCards, TricksNeeded, TrumpSuit)
+                    case TableCards of
+                        [] ->
+                            %% Bot is leading the trick
+                            lead_trick(Playable, TricksNeeded, TrumpSuit);
+                        _ ->
+                            %% Bot is following the trick
+                            follow_trick(BotId, Playable, TableCards, TricksNeeded, TrumpSuit)
+                    end
             end,
             {ok, CardToPlay}
     end.

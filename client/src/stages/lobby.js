@@ -2,6 +2,7 @@ import { connect, send, onStatusChange } from '../network.js';
 import { updateState, getState } from '../state.js';
 import { startTutorial } from '../tutorial.js';
 import { logInteraction } from '../logger.js';
+import { toggleSettingsMenu } from '../components/settings.js';
 
 let chatHistory = [];
 
@@ -55,6 +56,9 @@ function renderServerSelection(container) {
         <button id="btn-tutorial" class="btn btn-secondary text-base py-3.5 flex justify-center items-center gap-2 border border-amber-500/25">
           <span>📖</span> Learn Tutorial
         </button>
+        <button id="btn-main-settings" class="btn btn-secondary text-base py-3.5 flex justify-center items-center gap-2">
+          <span>⚙️</span> Game Settings
+        </button>
       </div>
     </div>
   `;
@@ -64,12 +68,19 @@ function renderServerSelection(container) {
   const btnOffline = card.querySelector('#btn-offline');
   const btnShowOnline = card.querySelector('#btn-show-online');
   const btnTutorial = card.querySelector('#btn-tutorial');
+  const btnMainSettings = card.querySelector('#btn-main-settings');
+
+  // Resolve WS URL dynamically using environment variables or fallback
+  const getWSUrl = (mode) => {
+    const base = import.meta.env.VITE_WS_URL || 'ws://127.0.0.1:8080';
+    return `${base}?mode=${mode}`;
+  };
 
   btnOffline.addEventListener('click', () => {
     logInteraction('Button Click: Play Offline vs Bots');
     btnOffline.disabled = true;
     btnOffline.textContent = 'Connecting...';
-    connect('ws://127.0.0.1:8080?mode=offline');
+    connect(getWSUrl('offline'));
   });
 
   btnShowOnline.addEventListener('click', () => {
@@ -78,7 +89,7 @@ function renderServerSelection(container) {
     btnShowOnline.textContent = 'Connecting...';
     
     // Connect to server automatically
-    connect('ws://127.0.0.1:8080?mode=online');
+    connect(getWSUrl('online'));
 
     const unsubscribe = onStatusChange((status) => {
       if (status === 'connected') {
@@ -96,6 +107,11 @@ function renderServerSelection(container) {
   btnTutorial.addEventListener('click', () => {
     logInteraction('Button Click: Learn Tutorial');
     startTutorial();
+  });
+
+  btnMainSettings.addEventListener('click', () => {
+    logInteraction('Button Click: Open Main Menu Settings');
+    toggleSettingsMenu();
   });
 }
 
@@ -341,8 +357,13 @@ function submitJoinRoom(roomId, password, role) {
 }
 
 function renderWaitingRoom(players, container, state) {
+  const showChat = localStorage.getItem('whist_show_chat') !== 'false';
   const card = document.createElement('div');
-  card.className = 'glass p-8 max-w-4xl w-full mx-4 flex flex-col md:flex-row gap-6 shadow-2xl relative rounded-2xl';
+  if (showChat) {
+    card.className = 'glass p-8 max-w-4xl w-full mx-4 flex flex-col md:flex-row gap-6 shadow-2xl relative rounded-2xl';
+  } else {
+    card.className = 'glass p-8 max-w-xl w-full mx-4 flex flex-col gap-6 shadow-2xl relative rounded-2xl';
+  }
 
   const count = players.length;
   const isSpectator = state.is_spectator === true;
@@ -350,15 +371,44 @@ function renderWaitingRoom(players, container, state) {
   const isHostUser = localPlayer.id === 'p1';
   const isReadyUser = localPlayer.status === 'Ready';
 
+  // Read game settings for active rule display
+  const gameSettings = state.settings || {
+    end_condition: 'score',
+    target_score: 100,
+    target_rounds: 8,
+    exchange_cards_count: 2,
+    bot_difficulty: 'hard'
+  };
+
+  const endCondText = gameSettings.end_condition === 'rounds' 
+    ? `${gameSettings.target_rounds} Rounds` 
+    : `${gameSettings.target_score} Points`;
+  const exchangeText = gameSettings.exchange_cards_count === 0 
+    ? 'No Exchange' 
+    : `${gameSettings.exchange_cards_count} Cards`;
+  const difficultyText = gameSettings.bot_difficulty === 'easy' ? 'Easy Bots' : 'Hard Bots';
+
   card.innerHTML = `
     <!-- Left Side: Players & Controls -->
     <div class="flex-1 flex flex-col items-center text-center">
-      <h2 class="text-2xl font-black text-white mb-1 tracking-wide">Waiting Room</h2>
-      <div class="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-2 pulse-soft">
+      <!-- Header row containing title and settings button -->
+      <div class="flex justify-between items-center w-full mb-3 pb-2 border-b border-slate-800/40">
+        <h2 class="text-2xl font-black text-white tracking-wide">Waiting Room</h2>
+        <button id="btn-waiting-room-settings" class="btn btn-secondary text-xs !py-1 !px-2.5 flex items-center gap-1">⚙️ Settings</button>
+      </div>
+
+      <div class="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-1 pulse-soft">
         ${isSpectator ? 'Spectating Mode — Waiting for game launch' : 'Waiting for players to join...'}
       </div>
       
-      ${isSpectator ? '<div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-900/50 border border-slate-800 px-3 py-1 rounded mb-6">Viewer</div>' : '<div class="mb-6"></div>'}
+      <!-- Active Rules Badges -->
+      <div class="flex flex-wrap gap-2 justify-center mb-4">
+        <span class="text-[9px] uppercase font-black tracking-wider px-2 py-0.5 rounded border border-slate-800 bg-slate-950/40 text-slate-400">Goal: ${endCondText}</span>
+        <span class="text-[9px] uppercase font-black tracking-wider px-2 py-0.5 rounded border border-slate-800 bg-slate-950/40 text-slate-400">Passing: ${exchangeText}</span>
+        <span class="text-[9px] uppercase font-black tracking-wider px-2 py-0.5 rounded border border-slate-800 bg-slate-950/40 text-slate-400">AI: ${difficultyText}</span>
+      </div>
+      
+      ${isSpectator ? '<div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-900/50 border border-slate-800 px-3 py-1 rounded mb-6">Viewer</div>' : '<div class="mb-4"></div>'}
 
       <!-- Players grid -->
       <div class="grid grid-cols-2 gap-4 w-full mb-6">
@@ -414,24 +464,26 @@ function renderWaitingRoom(players, container, state) {
       </div>
     </div>
 
-    <!-- Divider -->
-    <div class="hidden md:block w-px bg-slate-800 self-stretch"></div>
+    ${showChat ? `
+      <!-- Divider -->
+      <div class="hidden md:block w-px bg-slate-800 self-stretch"></div>
 
-    <!-- Right Side: Chat Box -->
-    <div class="w-full md:w-80 flex flex-col h-[320px] md:h-auto">
-      <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest text-left mb-3">Room Chat</h3>
-      
-      <!-- Chat logs container -->
-      <div id="chat-messages" class="flex-1 overflow-y-auto pr-1 bg-slate-950/50 border border-slate-800/80 rounded-xl p-3 flex flex-col gap-2 min-h-[160px] max-h-[220px] md:max-h-[300px] text-left">
-        <div class="text-[10px] text-slate-500 italic text-center py-4">Welcome to the lobby chat. Say hello!</div>
+      <!-- Right Side: Chat Box -->
+      <div class="w-full md:w-80 flex flex-col h-[320px] md:h-auto">
+        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest text-left mb-3">Room Chat</h3>
+        
+        <!-- Chat logs container -->
+        <div id="chat-messages" class="flex-1 overflow-y-auto pr-1 bg-slate-950/50 border border-slate-800/80 rounded-xl p-3 flex flex-col gap-2 min-h-[160px] max-h-[220px] md:max-h-[300px] text-left">
+          <div class="text-[10px] text-slate-500 italic text-center py-4">Welcome to the lobby chat. Say hello!</div>
+        </div>
+        
+        <!-- Chat input form -->
+        <form id="chat-form" class="flex gap-2 mt-3 pointer-events-auto">
+          <input type="text" id="chat-input" class="input flex-1 !py-2 text-xs" placeholder="Type a message..." maxlength="100" autocomplete="off" />
+          <button type="submit" class="btn btn-primary text-xs !py-2 !px-3.5">Send</button>
+        </form>
       </div>
-      
-      <!-- Chat input form -->
-      <form id="chat-form" class="flex gap-2 mt-3 pointer-events-auto">
-        <input type="text" id="chat-input" class="input flex-1 !py-2 text-xs" placeholder="Type a message..." maxlength="100" autocomplete="off" />
-        <button type="submit" class="btn btn-primary text-xs !py-2 !px-3.5">Send</button>
-      </form>
-    </div>
+    ` : ''}
   `;
 
   container.appendChild(card);
@@ -441,12 +493,13 @@ function renderWaitingRoom(players, container, state) {
   const btnReady = card.querySelector('#btn-ready-room');
   const btnClose = card.querySelector('#btn-close-room');
   const btnStart = card.querySelector('#btn-start-game');
+  const btnWaitingSettings = card.querySelector('#btn-waiting-room-settings');
   const chatForm = card.querySelector('#chat-form');
   const chatInput = card.querySelector('#chat-input');
   const msgsContainer = card.querySelector('#chat-messages');
 
   // Populated saved messages on render
-  if (chatHistory.length > 0) {
+  if (showChat && msgsContainer && chatHistory.length > 0) {
     msgsContainer.innerHTML = '';
     chatHistory.forEach(data => {
       const msgEl = document.createElement('div');
@@ -470,7 +523,7 @@ function renderWaitingRoom(players, container, state) {
     const data = e.detail;
     chatHistory.push(data);
     
-    if (msgsContainer) {
+    if (showChat && msgsContainer) {
       const welcome = msgsContainer.querySelector('.italic');
       if (welcome) welcome.remove();
 
@@ -489,6 +542,13 @@ function renderWaitingRoom(players, container, state) {
   window.addEventListener('whist_chat', window._chatListener);
 
   // Wire buttons
+  if (btnWaitingSettings) {
+    btnWaitingSettings.addEventListener('click', () => {
+      logInteraction('Button Click: Open Waiting Room Settings');
+      toggleSettingsMenu();
+    });
+  }
+
   if (btnExit) {
     btnExit.addEventListener('click', () => {
       logInteraction('Button Click: Exit Room');
@@ -536,20 +596,22 @@ function renderWaitingRoom(players, container, state) {
   }
 
   // Wire Chat submit
-  chatForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const msg = chatInput.value.trim();
-    if (!msg) return;
+  if (showChat && chatForm && chatInput) {
+    chatForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const msg = chatInput.value.trim();
+      if (!msg) return;
 
-    logInteraction(`Form Submit: Send Chat message: "${msg}"`);
-    send({
-      action: 'chat',
-      message: msg
+      logInteraction(`Form Submit: Send Chat message: "${msg}"`);
+      send({
+        action: 'chat',
+        message: msg
+      });
+
+      chatInput.value = '';
+      chatInput.focus();
     });
-
-    chatInput.value = '';
-    chatInput.focus();
-  });
+  }
 
   // Wire player card clicks to show statistics profile
   card.querySelectorAll('.player-card').forEach(el => {

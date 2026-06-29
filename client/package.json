@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:desktop": "vite build --mode desktop",
+    "build:mobile": "vite build --mode mobile"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.1",

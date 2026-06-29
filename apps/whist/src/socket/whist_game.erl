@@ -364,6 +364,24 @@ find_player_id_by_conn(ConnPid, Connections) ->
         Connections
     ).
 
+handle_player_action(~"update_settings", PlayerId, Msg, State) ->
+    RulesState = State#game_session_state.rules_state,
+    IsAllowed = (RulesState#rules_state.stage =:= lobby) andalso (PlayerId =:= ~"p1"),
+    case IsAllowed of
+        true ->
+            ClientSettings = maps:get(~"settings", Msg, #{}),
+            CurrentSettings = RulesState#rules_state.settings,
+            NewSettings = maps:merge(CurrentSettings, ClientSettings),
+            NewRulesState = RulesState#rules_state{
+                settings = NewSettings
+            },
+            NewState = State#game_session_state{rules_state = NewRulesState},
+            broadcast_state(NewState),
+            {noreply, NewState};
+        false ->
+            {noreply, State}
+    end;
+
 handle_player_action(~"bet", PlayerId, Msg, State) ->
     %% Expected format: { "action": "bet", "takes": Integer, "suit": String }
     Takes = maps:get(~"takes", Msg),

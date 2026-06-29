@@ -25,7 +25,15 @@ ready_next_round(PlayerId, State) ->
     
     case IsAllReady of
         true ->
-            GameOver = lists:any(fun(P) -> maps:get(~"score", P) >= State#rules_state.target_score end, NewPlayers),
+            EndCondition = maps:get(~"end_condition", State#rules_state.settings, ~"score"),
+            GameOver = case EndCondition of
+                ~"rounds" ->
+                    TargetRounds = maps:get(~"target_rounds", State#rules_state.settings, 8),
+                    State#rules_state.round >= TargetRounds;
+                _ ->
+                    TargetScore = maps:get(~"target_score", State#rules_state.settings, State#rules_state.target_score),
+                    lists:any(fun(P) -> maps:get(~"score", P) >= TargetScore end, NewPlayers)
+            end,
             case GameOver of
                 true ->
                     Winner = whist_utils:find_highest_score_player(NewPlayers),

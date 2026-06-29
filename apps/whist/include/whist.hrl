@@ -35,7 +35,8 @@
     target_score = ?TARGET_SCORE :: integer(),
     current_turn = <<>> :: binary(),
     ready_players = [] :: [binary()],
-    mode = online :: offline | online
+    mode = online :: offline | online,
+    settings = #{} :: map()
 }).
 
 %% @doc The gen_server state record for whist_game.erl (game session coordinator)

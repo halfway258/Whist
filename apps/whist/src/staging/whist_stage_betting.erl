@@ -92,8 +92,19 @@ bet_stage1(PlayerId, Takes, Suit, State) ->
                     %% Check if all 4 skipped at the start
                     case NewConsecutiveSkips =:= 4 andalso State#rules_state.max_bid =:= null of
                         true ->
-                            %% Card Exchange Phase
-                            enter_exchange_phase(TempState);
+                            ExchangeCount = maps:get(~"exchange_cards_count", TempState#rules_state.settings, 2),
+                            case ExchangeCount > 0 of
+                                true ->
+                                    enter_exchange_phase(TempState);
+                                false ->
+                                    {ok, TempState#rules_state{
+                                        stage = dealing,
+                                        bidding_stage = suit,
+                                        all_pass_count = 0,
+                                        consecutive_skips = 0,
+                                        max_bid = null
+                                    }}
+                            end;
                         false ->
                             %% Next player turn
                             advance_stage1_turn(PlayerId, TempState)
@@ -260,7 +271,8 @@ bet_stage2(PlayerId, Takes, State) ->
 
 %% Card Exchange Phase
 exchange_cards(PlayerId, CardList, State) ->
-    case State#rules_state.bidding_stage =:= exchange andalso length(CardList) =:= 2 of
+    ExchangeCount = maps:get(~"exchange_cards_count", State#rules_state.settings, 2),
+    case State#rules_state.bidding_stage =:= exchange andalso length(CardList) =:= ExchangeCount of
         true ->
             Hand = maps:get(PlayerId, State#rules_state.hands, []),
             HasCards = lists:all(fun(C) -> lists:member(C, Hand) end, CardList),
@@ -376,14 +388,15 @@ transition_to_stage2(State) ->
     }}.
 
 enter_exchange_phase(State) ->
-    %% Auto-select 2 cards for each bot and store them in exchange_cards
+    ExchangeCount = maps:get(~"exchange_cards_count", State#rules_state.settings, 2),
+    %% Auto-select cards for each bot and store them in exchange_cards
     Bots = [P || P <- State#rules_state.players, maps:get(~"bot", P) =:= true],
     ExchangeMap = lists:foldl(
         fun(Bot, Acc) ->
             BotId = maps:get(~"id", Bot),
             Hand = maps:get(BotId, State#rules_state.hands, []),
-            {Chosen, _} = case length(Hand) >= 2 of
-                true -> lists:split(2, whist_utils:shuffle(Hand));
+            {Chosen, _} = case length(Hand) >= ExchangeCount of
+                true -> lists:split(ExchangeCount, whist_utils:shuffle(Hand));
                 false -> {Hand, []}
             end,
             maps:put(BotId, Chosen, Acc)
@@ -392,10 +405,11 @@ enter_exchange_phase(State) ->
         Bots
     ),
     
+    StatusText = list_to_binary(io_lib:format("Select ~p cards to exchange", [ExchangeCount])),
     NewPlayers = [
         case maps:get(~"bot", P) of
             true -> P#{~"status" => ~"Submitted", ~"is_turn" => false};
-            false -> P#{~"status" => ~"Select 2 cards to exchange", ~"is_turn" => true}
+            false -> P#{~"status" => StatusText, ~"is_turn" => true}
         end
         || P <- State#rules_state.players
     ],
@@ -405,7 +419,7 @@ enter_exchange_phase(State) ->
         exchange_cards = ExchangeMap,
         players = NewPlayers,
         current_turn = ~"p1",
-        prompt_data = #{~"bidding_stage" => ~"exchange", ~"select_cards_to_exchange" => 2}
+        prompt_data = #{~"bidding_stage" => ~"exchange", ~"select_cards_to_exchange" => ExchangeCount}
     }}.
 
 perform_card_transfer(State) ->
@@ -460,31 +474,53 @@ perform_card_transfer(State) ->
 
 %% Bot logic: Stage 1 Suit Selection
 make_bot_stage1_bid(BotId, State) ->
-    Hand = maps:get(BotId, State#rules_state.hands, []),
-    LongestSuit = find_longest_suit(Hand),
-    LongestCount = length([C || C <- Hand, maps:get(~"suit", C) =:= LongestSuit]),
-    
-    case LongestCount >= 5 of
-        true ->
-            case State#rules_state.max_bid of
-                null ->
-                    {bid, 5, LongestSuit};
-                MaxBid ->
-                    MaxTakes = maps:get(~"takes", MaxBid),
-                    MaxSuit = maps:get(~"suit", MaxBid),
-                    CanSameTakes = is_higher_suit(LongestSuit, MaxSuit),
-                    case CanSameTakes of
-                        true when LongestCount >= MaxTakes ->
-                            {bid, MaxTakes, LongestSuit};
-                        _ ->
-                            case LongestCount > MaxTakes of
-                                true -> {bid, MaxTakes + 1, LongestSuit};
-                                false -> skip
+    BotDifficulty = maps:get(~"bot_difficulty", State#rules_state.settings, ~"hard"),
+    case BotDifficulty of
+        ~"easy" ->
+            case rand:uniform(100) =< 25 of
+                true ->
+                    Hand = maps:get(BotId, State#rules_state.hands, []),
+                    LongestSuit = find_longest_suit(Hand),
+                    case State#rules_state.max_bid of
+                        null -> {bid, 5, LongestSuit};
+                        MaxBid ->
+                            MaxTakes = maps:get(~"takes", MaxBid),
+                            MaxSuit = maps:get(~"suit", MaxBid),
+                            case is_higher_suit(LongestSuit, MaxSuit) of
+                                true when MaxTakes =:= 5 -> {bid, 5, LongestSuit};
+                                _ -> skip
                             end
-                    end
+                    end;
+                false ->
+                    skip
             end;
-        false ->
-            skip
+        _ ->
+            Hand = maps:get(BotId, State#rules_state.hands, []),
+            LongestSuit = find_longest_suit(Hand),
+            LongestCount = length([C || C <- Hand, maps:get(~"suit", C) =:= LongestSuit]),
+            
+            case LongestCount >= 5 of
+                true ->
+                    case State#rules_state.max_bid of
+                        null ->
+                            {bid, 5, LongestSuit};
+                        MaxBid ->
+                            MaxTakes = maps:get(~"takes", MaxBid),
+                            MaxSuit = maps:get(~"suit", MaxBid),
+                            CanSameTakes = is_higher_suit(LongestSuit, MaxSuit),
+                            case CanSameTakes of
+                                true when LongestCount >= MaxTakes ->
+                                    {bid, MaxTakes, LongestSuit};
+                                _ ->
+                                    case LongestCount > MaxTakes of
+                                        true -> {bid, MaxTakes + 1, LongestSuit};
+                                        false -> skip
+                                    end
+                            end
+                    end;
+                false ->
+                    skip
+            end
     end.
 
 find_longest_suit(Hand) ->
@@ -498,15 +534,20 @@ is_higher_suit(Suit1, Suit2) ->
 
 %% Bot logic: Stage 2 Takes Selection
 make_bot_stage2_bid(BotId, State) ->
+    BotDifficulty = maps:get(~"bot_difficulty", State#rules_state.settings, ~"hard"),
     Hand = maps:get(BotId, State#rules_state.hands, []),
     MaxBid = State#rules_state.max_bid,
     TrumpSuit = maps:get(~"suit", MaxBid),
     
-    HighCardsCount = length([C || C <- Hand, maps:get(~"value", C) >= 12]),
-    TrumpCount = length([C || C <- Hand, maps:get(~"suit", C) =:= TrumpSuit]),
-    
-    BaseEstimate = HighCardsCount div 2 + TrumpCount div 3,
-    EstimatedTakes = erlang:max(0, erlang:min(13, BaseEstimate)),
+    EstimatedTakes = case BotDifficulty of
+        ~"easy" ->
+            rand:uniform(5) - 1;
+        _ ->
+            HighCardsCount = length([C || C <- Hand, maps:get(~"value", C) >= 12]),
+            TrumpCount = length([C || C <- Hand, maps:get(~"suit", C) =:= TrumpSuit]),
+            BaseEstimate = HighCardsCount div 2 + TrumpCount div 3,
+            erlang:max(0, erlang:min(13, BaseEstimate))
+    end,
     
     MakerId = maps:get(~"player_id", MaxBid),
     case BotId =:= MakerId of

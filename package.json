@@ -1,0 +1,17 @@
+{
+  "scripts": {
+    "dev": "npm run dev --prefix client",
+    "build": "npm run build --prefix client",
+    "build:desktop": "npm run build:desktop --prefix client",
+    "build:mobile": "npm run build:mobile --prefix client"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.4.1",
+    "@tauri-apps/cli": "^2.11.4"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.4.1",
+    "@capacitor/core": "^8.4.1",
+    "@capacitor/ios": "^8.4.1"
+  }
+}

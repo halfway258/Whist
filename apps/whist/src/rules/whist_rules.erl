@@ -37,7 +37,19 @@
 
 %% @doc Initializes the functional rules state.
 init(Mode) ->
-    #rules_state{mode = Mode}.
+    #rules_state{
+        mode = Mode,
+        settings = default_settings()
+    }.
+
+default_settings() ->
+    #{
+        ~"end_condition" => ~"score",
+        ~"target_score" => 100,
+        ~"target_rounds" => 8,
+        ~"exchange_cards_count" => 2,
+        ~"bot_difficulty" => ~"hard"
+    }.
 
 %% @doc Registers a player or bot joining the game (Delegated to whist_stage_lobby).
 join(PlayerId, Name, IsBot, State) ->
@@ -155,7 +167,7 @@ make_state_map(State, ViewerId) ->
         ~"current_stage" => StageStr,
         ~"game_stats" => #{
             ~"round" => State#rules_state.round,
-            ~"target_score" => State#rules_state.target_score,
+            ~"target_score" => maps:get(~"target_score", State#rules_state.settings, State#rules_state.target_score),
             ~"play_style" => case State#rules_state.play_style of over -> ~"OVER"; under -> ~"UNDER" end,
             ~"bidding_stage" => case State#rules_state.bidding_stage of suit -> ~"SUIT"; takes -> ~"TAKES"; exchange -> ~"EXCHANGE" end,
             ~"trump_suit" => case State#rules_state.max_bid of null -> ~"no_trump"; M -> maps:get(~"suit", M) end
@@ -165,7 +177,8 @@ make_state_map(State, ViewerId) ->
         ~"table_cards" => State#rules_state.table_cards,
         ~"prompt_data" => State#rules_state.prompt_data,
         ~"trick_winner" => State#rules_state.trick_winner,
-        ~"winner" => WinnerFormatted
+        ~"winner" => WinnerFormatted,
+        ~"settings" => State#rules_state.settings
     }.
 
 %% @doc Replaces a player with a bot in rules state.

@@ -26,6 +26,13 @@ function boot() {
   const feltBrightness = localStorage.getItem('whist_felt_brightness') || '100';
   document.documentElement.style.setProperty('--table-brightness', parseFloat(feltBrightness) / 100);
 
+  const theme = localStorage.getItem('whist_theme') || 'dark';
+  if (theme === 'light') {
+    document.body.classList.add('light-theme');
+  } else {
+    document.body.classList.remove('light-theme');
+  }
+
   // Initialize router (caches DOM refs)
   initRouter();
 
