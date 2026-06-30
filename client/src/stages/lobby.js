@@ -72,7 +72,8 @@ function renderServerSelection(container) {
 
   // Resolve WS URL dynamically using environment variables or fallback
   const getWSUrl = (mode) => {
-    const base = import.meta.env.VITE_WS_URL || 'ws://127.0.0.1:8080';
+    const savedUrl = localStorage.getItem('whist_server_url');
+    const base = savedUrl || import.meta.env.VITE_WS_URL || 'wss://israeli-whist-backend.fly.dev';
     return `${base}?mode=${mode}`;
   };
 

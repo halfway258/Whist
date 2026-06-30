@@ -42,4 +42,4 @@ echo "Open your browser at the URL shown below."
 echo "Press Ctrl+C to stop both client and backend daemon."
 echo "-----------------------------------------"
 
-npm run dev --prefix client -- --host 127.0.0.1
+VITE_WS_URL=ws://127.0.0.1:8080 npm run dev --prefix client -- --host 127.0.0.1

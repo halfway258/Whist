@@ -1,4 +1,4 @@
-import { send, disconnect } from '../network.js';
+import { send, disconnect, getConnectionStatus, onStatusChange } from '../network.js';
 import { getState, updateState } from '../state.js';
 import { logInteraction } from '../logger.js';
 
@@ -6,6 +6,7 @@ export function toggleSettingsMenu() {
   let menu = document.getElementById('settings-menu-overlay');
   if (menu) {
     logInteraction('Settings menu toggled close');
+    if (menu._cleanup) menu._cleanup();
     menu.remove();
     return;
   }
@@ -37,6 +38,22 @@ export function toggleSettingsMenu() {
     bot_difficulty: 'hard'
   };
 
+  // Load current Server URL values
+  const defaultServerUrl = import.meta.env.VITE_WS_URL || 'ws://127.0.0.1:8080';
+  const savedServerUrl = localStorage.getItem('whist_server_url') || defaultServerUrl;
+  const isPlayingOrWaiting = players.length > 0;
+
+  const connStatus = getConnectionStatus();
+  let statusClass = 'border-slate-800 text-slate-500 bg-slate-900/40';
+  let statusText = 'Disconnected';
+  if (connStatus === 'connected') {
+    statusClass = 'border-emerald-500/20 text-emerald-400 bg-emerald-950/10';
+    statusText = 'Connected';
+  } else if (connStatus === 'connecting') {
+    statusClass = 'border-amber-500/20 text-amber-400 bg-amber-950/20';
+    statusText = 'Connecting';
+  }
+
   menu = document.createElement('div');
   menu.id = 'settings-menu-overlay';
   menu.className = 'fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 pointer-events-auto';
@@ -46,6 +63,7 @@ export function toggleSettingsMenu() {
       <!-- Header -->
       <div class="flex border-b border-slate-800 pb-3 mb-5">
         <button id="tab-visuals" class="flex-1 text-center py-2 text-xs font-black uppercase tracking-wider text-amber-400 border-b-2 border-amber-500">Visuals</button>
+        <button id="tab-server" class="flex-1 text-center py-2 text-xs font-black uppercase tracking-wider text-slate-400 border-b-2 border-transparent">Server</button>
         <button id="tab-rules" class="flex-1 text-center py-2 text-xs font-black uppercase tracking-wider text-slate-400 border-b-2 border-transparent">Game Rules</button>
       </div>
 
@@ -104,6 +122,42 @@ export function toggleSettingsMenu() {
               <span>Show Lobby Chat Box</span>
             </label>
           </div>
+        </div>
+
+        <!-- Server Settings -->
+        <div id="panel-server" class="flex flex-col gap-5 hidden">
+          <!-- Connection Status -->
+          <div class="flex justify-between items-center text-xs font-bold uppercase tracking-wide text-slate-300">
+            <span>Connection Status</span>
+            <span id="server-status-badge" class="px-2 py-0.5 rounded font-black text-[10px] uppercase tracking-wider border ${statusClass}">${statusText}</span>
+          </div>
+
+          <!-- Server URL Input -->
+          <div class="flex flex-col gap-2">
+            <label class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">WebSocket Server URL</label>
+            <input type="text" id="settings-server-url" class="input w-full text-sm font-mono" placeholder="${defaultServerUrl}" value="${savedServerUrl}" ${isPlayingOrWaiting ? 'disabled' : ''} />
+            <div id="settings-server-url-error" class="text-rose-400 text-[10px] font-bold mt-1 hidden"></div>
+          </div>
+
+          <!-- Helper instructions -->
+          <p class="text-[11px] text-slate-400 leading-normal">
+            The client connects to this Erlang WebSocket server to host rooms and process game logic.
+          </p>
+
+          ${isPlayingOrWaiting ? `
+            <div class="glass-sm p-3 border border-amber-500/20 text-amber-400 text-[11px] font-semibold text-center leading-relaxed">
+              ⚠️ Leave your current match or waiting room to modify the Server URL.
+            </div>
+          ` : `
+            <div class="flex gap-2">
+              <button id="btn-reset-server-url" class="btn btn-secondary flex-1 py-2 text-xs font-bold">
+                Reset Default
+              </button>
+              <button id="btn-save-server-url" class="btn btn-gold flex-1 py-2 text-xs font-bold">
+                Save & Connect
+              </button>
+            </div>
+          `}
         </div>
 
         <!-- Game Rules Settings -->
@@ -190,23 +244,93 @@ export function toggleSettingsMenu() {
 
   // Hook up tabs
   const tabVisuals = menu.querySelector('#tab-visuals');
+  const tabServer = menu.querySelector('#tab-server');
   const tabRules = menu.querySelector('#tab-rules');
   const panelVisuals = menu.querySelector('#panel-visuals');
+  const panelServer = menu.querySelector('#panel-server');
   const panelRules = menu.querySelector('#panel-rules');
 
-  tabVisuals.addEventListener('click', () => {
-    tabVisuals.className = 'flex-1 text-center py-2 text-xs font-black uppercase tracking-wider text-amber-400 border-b-2 border-amber-500';
-    tabRules.className = 'flex-1 text-center py-2 text-xs font-black uppercase tracking-wider text-slate-400 border-b-2 border-transparent';
-    panelVisuals.classList.remove('hidden');
-    panelRules.classList.add('hidden');
+  const setTab = (activeTab) => {
+    const tabs = [
+      { btn: tabVisuals, panel: panelVisuals },
+      { btn: tabServer, panel: panelServer },
+      { btn: tabRules, panel: panelRules }
+    ];
+    tabs.forEach(t => {
+      if (t.btn === activeTab) {
+        t.btn.className = 'flex-1 text-center py-2 text-xs font-black uppercase tracking-wider text-amber-400 border-b-2 border-amber-500';
+        t.panel.classList.remove('hidden');
+      } else {
+        t.btn.className = 'flex-1 text-center py-2 text-xs font-black uppercase tracking-wider text-slate-400 border-b-2 border-transparent';
+        t.panel.classList.add('hidden');
+      }
+    });
+  };
+
+  tabVisuals.addEventListener('click', () => setTab(tabVisuals));
+  tabServer.addEventListener('click', () => setTab(tabServer));
+  tabRules.addEventListener('click', () => setTab(tabRules));
+
+  // Connection status live updates
+  const statusBadge = menu.querySelector('#server-status-badge');
+  const unsubscribeStatus = onStatusChange((newStatus) => {
+    if (!statusBadge) return;
+    let sClass = 'border-slate-800 text-slate-500 bg-slate-900/40';
+    let sText = 'Disconnected';
+    if (newStatus === 'connected') {
+      sClass = 'border-emerald-500/20 text-emerald-400 bg-emerald-950/10';
+      sText = 'Connected';
+    } else if (newStatus === 'connecting') {
+      sClass = 'border-amber-500/20 text-amber-400 bg-amber-950/20';
+      sText = 'Connecting';
+    }
+    statusBadge.className = `px-2 py-0.5 rounded font-black text-[10px] uppercase tracking-wider border ${sClass}`;
+    statusBadge.textContent = sText;
   });
 
-  tabRules.addEventListener('click', () => {
-    tabRules.className = 'flex-1 text-center py-2 text-xs font-black uppercase tracking-wider text-amber-400 border-b-2 border-amber-500';
-    tabVisuals.className = 'flex-1 text-center py-2 text-xs font-black uppercase tracking-wider text-slate-400 border-b-2 border-transparent';
-    panelRules.classList.remove('hidden');
-    panelVisuals.classList.add('hidden');
-  });
+  // Store cleanup on menu element
+  menu._cleanup = unsubscribeStatus;
+
+  const closeMenu = () => {
+    if (menu._cleanup) menu._cleanup();
+    menu.remove();
+  };
+
+  // Hook up server inputs if not playing
+  if (!isPlayingOrWaiting) {
+    const inputUrl = menu.querySelector('#settings-server-url');
+    const btnReset = menu.querySelector('#btn-reset-server-url');
+    const btnSave = menu.querySelector('#btn-save-server-url');
+    const errorEl = menu.querySelector('#settings-server-url-error');
+
+    btnReset.addEventListener('click', () => {
+      logInteraction('Button Click: Reset Server URL to Default');
+      inputUrl.value = defaultServerUrl;
+      if (errorEl) errorEl.classList.add('hidden');
+    });
+
+    btnSave.addEventListener('click', () => {
+      const val = inputUrl.value.trim();
+      if (!val) return;
+      
+      if (errorEl) errorEl.classList.add('hidden');
+      if (!val.startsWith('ws://') && !val.startsWith('wss://')) {
+        if (errorEl) {
+          errorEl.textContent = 'URL must start with ws:// or wss://';
+          errorEl.classList.remove('hidden');
+        }
+        return;
+      }
+
+      logInteraction(`Button Click: Save Server URL: "${val}"`);
+      localStorage.setItem('whist_server_url', val);
+      btnSave.textContent = 'Saved! ✓';
+      btnSave.className = 'btn btn-primary flex-1 py-2 text-xs font-bold';
+      setTimeout(() => {
+        closeMenu();
+      }, 500);
+    });
+  }
 
   // Visual inputs
   const themeSelector = menu.querySelector('#theme-selector');
@@ -340,7 +464,7 @@ export function toggleSettingsMenu() {
   // Close button
   btnClose.addEventListener('click', () => {
     logInteraction('Button Click: Close Settings');
-    menu.remove();
+    closeMenu();
   });
 
   // Exit button
@@ -354,7 +478,7 @@ export function toggleSettingsMenu() {
 
       showCustomConfirm(warningMsg, () => {
         logInteraction('Button Click: Confirm Exit Game');
-        menu.remove();
+        closeMenu();
         send({ action: 'leave_room' });
         disconnect();
         

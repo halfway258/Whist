@@ -7,7 +7,7 @@
 init() ->
     %% Ensure Mnesia directory is set
     MnesiaDir = case os:getenv("MNESIA_DIR") of
-        false -> "/app/mnesia";
+        false -> "mnesia_data";
         Path -> Path
     end,
     application:set_env(mnesia, dir, MnesiaDir),
@@ -42,7 +42,11 @@ init() ->
         {aborted, {already_exists, player_profile}} -> ok;
         {aborted, Reason2} -> exit(Reason2)
     end,
-    ok.
+    case mnesia:wait_for_tables([room_db, player_profile], 5000) of
+        ok -> ok;
+        {timeout, BadTabs} -> exit({timeout_waiting_for_tables, BadTabs});
+        {error, ErrReason} -> exit({error_waiting_for_tables, ErrReason})
+    end.
 
 save_room(RoomId, Name, Password, RulesState) ->
     Record = #room_db{
@@ -79,7 +83,7 @@ register_profile(Username, Password) ->
     F = fun() ->
         case mnesia:read(player_profile, Username) of
             [] ->
-                mnesia:write(player_profile, Record),
+                mnesia:write(Record),
                 ok;
             [_] ->
                 {error, already_exists}
@@ -112,7 +116,7 @@ update_profile_stats(Username, Won, Score) ->
                     games_won = NewWon,
                     total_score = NewScore
                 },
-                mnesia:write(player_profile, Updated);
+                mnesia:write(Updated);
             [] ->
                 ok
         end

@@ -38,7 +38,7 @@ trap cleanup INT TERM EXIT
 
 # 5. Build client for production
 echo "Compiling client production assets..."
-npm run build --prefix client
+VITE_WS_URL=ws://127.0.0.1:8080 npm run build --prefix client
 
 # 6. Preview the production build
 echo "Starting Vite client preview server..."
