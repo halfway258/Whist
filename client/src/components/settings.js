@@ -1,4 +1,4 @@
-import { send, disconnect, getConnectionStatus, onStatusChange } from '../network.js';
+import { send, connect, disconnect, getConnectionStatus, onStatusChange } from '../network.js';
 import { getState, updateState } from '../state.js';
 import { logInteraction } from '../logger.js';
 
@@ -291,7 +291,12 @@ export function toggleSettingsMenu() {
   // Store cleanup on menu element
   menu._cleanup = unsubscribeStatus;
 
+  let unsubscribeSave = null;
+  let connectionTimeout = null;
+
   const closeMenu = () => {
+    if (unsubscribeSave) unsubscribeSave();
+    clearTimeout(connectionTimeout);
     if (menu._cleanup) menu._cleanup();
     menu.remove();
   };
@@ -322,13 +327,43 @@ export function toggleSettingsMenu() {
         return;
       }
 
-      logInteraction(`Button Click: Save Server URL: "${val}"`);
+      logInteraction(`Button Click: Attempting Save & Connect Server URL: "${val}"`);
+      btnSave.disabled = true;
+      btnSave.textContent = 'Connecting...';
+      btnReset.disabled = true;
+
+      // Persist the URL immediately
       localStorage.setItem('whist_server_url', val);
-      btnSave.textContent = 'Saved! ✓';
-      btnSave.className = 'btn btn-primary flex-1 py-2 text-xs font-bold';
-      setTimeout(() => {
-        closeMenu();
-      }, 500);
+
+      // Trigger connection
+      connect(val);
+
+      if (unsubscribeSave) unsubscribeSave();
+
+      // Timeout connection check after 5 seconds
+      clearTimeout(connectionTimeout);
+      connectionTimeout = setTimeout(() => {
+        if (unsubscribeSave) unsubscribeSave();
+        btnSave.disabled = false;
+        btnSave.textContent = 'Save & Connect';
+        btnReset.disabled = false;
+        if (errorEl) {
+          errorEl.textContent = 'Connection timeout. Check server status.';
+          errorEl.classList.remove('hidden');
+        }
+      }, 5000);
+
+      unsubscribeSave = onStatusChange((status) => {
+        if (status === 'connected') {
+          clearTimeout(connectionTimeout);
+          if (unsubscribeSave) unsubscribeSave();
+          btnSave.textContent = 'Connected! ✓';
+          btnSave.className = 'btn btn-primary flex-1 py-2 text-xs font-bold';
+          setTimeout(() => {
+            closeMenu();
+          }, 800);
+        }
+      });
     });
   }
 

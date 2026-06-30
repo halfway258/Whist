@@ -43,8 +43,19 @@ function renderServerSelection(container) {
 
     <div class="relative z-10 w-full flex flex-col items-center">
       <h1 class="text-5xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-400 to-blue-500 mb-2">WHIST</h1>
-      <div class="text-[10px] uppercase font-black tracking-widest text-emerald-400/80 mb-6 bg-emerald-950/40 px-2 py-0.5 rounded">Israeli Edition</div>
-      <p class="text-slate-400 text-sm mb-8">A classic trick-taking card game. Choose a connection option to start.</p>
+      <div class="text-[10px] uppercase font-black tracking-widest text-emerald-400/80 mb-4 bg-emerald-950/40 px-2 py-0.5 rounded">Israeli Edition</div>
+      <p class="text-slate-400 text-sm mb-4">A classic trick-taking card game. Choose a connection option to start.</p>
+
+      <!-- Server Connection Selection -->
+      <div class="flex flex-col gap-1.5 w-full mb-5 text-left relative z-20">
+        <label class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Server Connection</label>
+        <select id="select-server-url" class="input w-full py-2 px-3 text-xs font-semibold bg-slate-900 border border-slate-700 rounded text-slate-200">
+          <option value="wss://israeli-whist-backend.fly.dev">Online Server (Fly.io)</option>
+          <option value="ws://127.0.0.1:8080">Local Server (127.0.0.1)</option>
+          <option value="custom">Custom Server URL...</option>
+        </select>
+        <input type="text" id="input-custom-server-url" class="input w-full text-xs font-mono mt-1.5 hidden bg-slate-900 border border-slate-700 rounded text-slate-200 py-1.5 px-3" placeholder="ws://127.0.0.1:8080" />
+      </div>
 
       <div class="flex flex-col gap-4 w-full" id="menu-buttons">
         <button id="btn-offline" class="btn btn-primary text-base py-3.5 flex justify-center items-center gap-2">
@@ -69,22 +80,90 @@ function renderServerSelection(container) {
   const btnShowOnline = card.querySelector('#btn-show-online');
   const btnTutorial = card.querySelector('#btn-tutorial');
   const btnMainSettings = card.querySelector('#btn-main-settings');
+  const selectServer = card.querySelector('#select-server-url');
+  const inputCustom = card.querySelector('#input-custom-server-url');
 
-  // Resolve WS URL dynamically using environment variables or fallback
+  const defaultBase = import.meta.env.VITE_WS_URL || 'wss://israeli-whist-backend.fly.dev';
+  const currentSaved = localStorage.getItem('whist_server_url') || defaultBase;
+
+  // Initialize dropdown options from localStorage
+  if (currentSaved === 'wss://israeli-whist-backend.fly.dev') {
+    selectServer.value = 'wss://israeli-whist-backend.fly.dev';
+    inputCustom.classList.add('hidden');
+  } else if (currentSaved === 'ws://127.0.0.1:8080') {
+    selectServer.value = 'ws://127.0.0.1:8080';
+    inputCustom.classList.add('hidden');
+  } else {
+    selectServer.value = 'custom';
+    inputCustom.value = currentSaved;
+    inputCustom.classList.remove('hidden');
+  }
+
+  // Handle dropdown value changes
+  selectServer.addEventListener('change', () => {
+    const val = selectServer.value;
+    if (val === 'custom') {
+      inputCustom.classList.remove('hidden');
+      inputCustom.focus();
+      const customVal = inputCustom.value.trim() || 'ws://127.0.0.1:8080';
+      localStorage.setItem('whist_server_url', customVal);
+    } else {
+      inputCustom.classList.add('hidden');
+      inputCustom.classList.remove('border-rose-500');
+      localStorage.setItem('whist_server_url', val);
+    }
+  });
+
+  // Handle custom URL input edits
+  inputCustom.addEventListener('input', () => {
+    const customVal = inputCustom.value.trim();
+    if (customVal) {
+      localStorage.setItem('whist_server_url', customVal);
+    }
+  });
+
+  // Re-enable connection buttons if connection fails
+  if (window._lobbyStatusUnsubscribe) {
+    window._lobbyStatusUnsubscribe();
+  }
+  window._lobbyStatusUnsubscribe = onStatusChange((status) => {
+    if (status === 'disconnected') {
+      btnOffline.disabled = false;
+      btnOffline.textContent = '⚡ Play Offline vs Bots';
+      btnShowOnline.disabled = false;
+      btnShowOnline.textContent = '🌐 Online Multiplayer';
+    }
+  });
+
   const getWSUrl = (mode) => {
-    const savedUrl = localStorage.getItem('whist_server_url');
-    const base = savedUrl || import.meta.env.VITE_WS_URL || 'wss://israeli-whist-backend.fly.dev';
-    return `${base}?mode=${mode}`;
+    const savedUrl = localStorage.getItem('whist_server_url') || defaultBase;
+    return `${savedUrl}?mode=${mode}`;
+  };
+
+  const validateAndConnect = (mode, btn) => {
+    const savedUrl = localStorage.getItem('whist_server_url') || defaultBase;
+    if (!savedUrl.startsWith('ws://') && !savedUrl.startsWith('wss://')) {
+      inputCustom.classList.remove('hidden');
+      inputCustom.classList.add('border-rose-500');
+      inputCustom.focus();
+      btn.disabled = false;
+      btn.textContent = btn.id === 'btn-offline' ? '⚡ Play Offline vs Bots' : '🌐 Online Multiplayer';
+      return false;
+    }
+    inputCustom.classList.remove('border-rose-500');
+    connect(getWSUrl(mode));
+    return true;
   };
 
   btnOffline.addEventListener('click', () => {
     logInteraction('Button Click: Play Offline vs Bots');
     btnOffline.disabled = true;
     btnOffline.textContent = 'Connecting...';
-    connect(getWSUrl('offline'));
-    const state = getState() || {};
-    state.mode = 'offline';
-    updateState(state);
+    if (validateAndConnect('offline', btnOffline)) {
+      const state = getState() || {};
+      state.mode = 'offline';
+      updateState(state);
+    }
   });
 
   btnShowOnline.addEventListener('click', () => {
@@ -92,24 +171,21 @@ function renderServerSelection(container) {
     btnShowOnline.disabled = true;
     btnShowOnline.textContent = 'Connecting...';
     
-    // Connect to server automatically
-    connect(getWSUrl('online'));
+    if (validateAndConnect('online', btnShowOnline)) {
+      const state = getState() || {};
+      state.mode = 'online';
+      updateState(state);
 
-    const state = getState() || {};
-    state.mode = 'online';
-    updateState(state);
-
-    const unsubscribe = onStatusChange((status) => {
-      if (status === 'connected') {
-        unsubscribe();
-        const state = getState() || {};
-        state.view_stage = 'ROOM_LIST';
-        updateState(state);
-        
-        // Request the real list of rooms from the server
-        send({ action: 'list_rooms' });
-      }
-    });
+      const unsubscribe = onStatusChange((status) => {
+        if (status === 'connected') {
+          unsubscribe();
+          const state = getState() || {};
+          state.view_stage = 'ROOM_LIST';
+          updateState(state);
+          send({ action: 'list_rooms' });
+        }
+      });
+    }
   });
 
   btnTutorial.addEventListener('click', () => {
