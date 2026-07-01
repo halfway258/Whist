@@ -4,7 +4,7 @@
 import './style.css';
 import { updateState, subscribe, getState } from './state.js';
 import { initRouter, registerStage, routeState, getStages, getCurrentStage } from './router.js';
-import { setMessageHandler, connect } from './network.js';
+import { setMessageHandler, connect, send, onStatusChange } from './network.js';
 
 // Stage renderers
 import { renderLobby } from './stages/lobby.js';
@@ -90,6 +90,10 @@ function boot() {
       // Dispatch a global event for the waiting room chat box
       const event = new CustomEvent('whist_chat', { detail: data });
       window.dispatchEvent(event);
+    } else if (data && data.type === 'login_response') {
+      window.dispatchEvent(new CustomEvent('whist_login_response', { detail: data }));
+    } else if (data && data.type === 'register_response') {
+      window.dispatchEvent(new CustomEvent('whist_register_response', { detail: data }));
     } else if (data && data.type === 'room_closed') {
       showToast("Room closed by host.");
       const state = getState() || {};
@@ -98,6 +102,17 @@ function boot() {
       updateState(state);
     } else {
       updateState(data);
+    }
+  });
+
+  // Auto-login on connection if credentials exist
+  onStatusChange((status) => {
+    if (status === 'connected') {
+      const savedUser = localStorage.getItem('whist_username');
+      const savedPass = localStorage.getItem('whist_password');
+      if (savedUser && savedPass) {
+        send({ action: 'login', username: savedUser, password: savedPass });
+      }
     }
   });
 

@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "build:desktop": "vite build --mode desktop",
-    "build:mobile": "vite build --mode mobile"
+    "build:mobile": "vite build --mode mobile",
+    "zip": "npm run build && cd dist && zip -r ../client-prod.zip *"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.1",

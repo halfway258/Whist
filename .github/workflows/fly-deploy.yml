@@ -15,4 +15,4 @@ jobs:
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - run: flyctl deploy --remote-only
         env:
-          FLY_API_TOKEN: ${{ FlyV1 fm2_lJPECAAAAAAAFb6PxBCq8ZduqPMHaPO/eyJSxwxawrVodHRwczovL2FwaS5mbHkuaW8vdjGWAJLOABq+bR8Lk7lodHRwczovL2FwaS5mbHkuaW8vYWFhL3YxxDyspOQDMKHwsLf8lWMBsQZsUk0qiFmwE5QpZaR/dNjZxcH70ojVceZGVUDozgfGOOFs39wwXCx3XsgXwBzETkzYTUMR9cawUF6LVc9hSL+keas/fme+FEr0CBeF4SfeMwThkcCBIT0oWxrE8y12spg8cD37Wz4VNZCZGzBKay2ukJhI40wswQ2opHOXLA2SlAORgc4BORP4HwWRgqdidWlsZGVyH6J3Zx8BxCDc8YysvOFk5JAb3NuphVrhT5muuGOnCXJ2xhp4L8Qsww==,fm2_lJPETkzYTUMR9cawUF6LVc9hSL+keas/fme+FEr0CBeF4SfeMwThkcCBIT0oWxrE8y12spg8cD37Wz4VNZCZGzBKay2ukJhI40wswQ2opHOXLMQQc0lAEuQR0yizO3s9U4aoncO5aHR0cHM6Ly9hcGkuZmx5LmlvL2FhYS92MZgEks5qQohkzwAAAAFA1h5yF84AGZrzCpHOABma8wzEEOn5iEbu0j4rTbhSat/H6U3EIGLy64yFq4D+1HN8LUqSAxlZQ3JIY5V8MIeYo8bvaFW8 }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

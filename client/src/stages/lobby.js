@@ -1,10 +1,11 @@
-import { connect, send, onStatusChange } from '../network.js';
+import { connect, send, disconnect, onStatusChange, getConnectionStatus } from '../network.js';
 import { updateState, getState } from '../state.js';
 import { startTutorial } from '../tutorial.js';
 import { logInteraction } from '../logger.js';
 import { toggleSettingsMenu } from '../components/settings.js';
 
 let chatHistory = [];
+const DEFAULT_WS_URL = import.meta.env.VITE_WS_URL || 'wss://israeli-whist-backend.fly.dev';
 
 /**
  * Render the LOBBY / Server Selection and Room Browser stage.
@@ -34,6 +35,29 @@ function renderServerSelection(container) {
   const card = document.createElement('div');
   card.className = 'glass-opaque p-8 md:p-10 max-w-md w-full mx-4 flex flex-col items-center text-center shadow-2xl relative overflow-hidden';
   
+  const loggedInUser = localStorage.getItem('whist_logged_in_username') || null;
+  let loginHeaderHtml = '';
+  let loginButtonHtml = '';
+
+  if (loggedInUser) {
+    loginHeaderHtml = `
+      <div class="glass-sm px-3.5 py-2.5 flex items-center justify-between gap-2 w-full mb-3.5 rounded-xl border border-emerald-500/20">
+        <div class="flex items-center gap-2 text-xs font-bold text-emerald-400 min-w-0">
+          <span>👤</span>
+          <span class="text-slate-400 font-medium">User:</span>
+          <span class="font-extrabold text-white truncate max-w-[120px]">${loggedInUser}</span>
+        </div>
+        <button id="btn-logout" class="text-rose-400 hover:text-rose-300 font-extrabold uppercase text-[9px] tracking-wider border border-rose-500/35 px-2 py-0.5 rounded hover:bg-rose-950/20 transition-all shrink-0">Logout</button>
+      </div>
+    `;
+  } else {
+    loginButtonHtml = `
+      <button id="btn-login" class="btn btn-secondary text-base py-3.5 flex justify-center items-center gap-2">
+        <span>👤</span> Account Login / Create
+      </button>
+    `;
+  }
+
   card.innerHTML = `
     <!-- Floating decorative suit symbols -->
     <div class="absolute -top-10 -left-10 text-9xl text-slate-700/5 select-none font-bold">♠</div>
@@ -45,6 +69,8 @@ function renderServerSelection(container) {
       <h1 class="text-5xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-400 to-blue-500 mb-2">WHIST</h1>
       <div class="text-[10px] uppercase font-black tracking-widest text-emerald-400/80 mb-4 bg-emerald-950/40 px-2 py-0.5 rounded">Israeli Edition</div>
       <p class="text-slate-400 text-sm mb-4">A classic trick-taking card game. Choose a connection option to start.</p>
+
+      ${loginHeaderHtml}
 
       <!-- Server Connection Selection -->
       <div class="flex flex-col gap-1.5 w-full mb-5 text-left relative z-20">
@@ -64,6 +90,7 @@ function renderServerSelection(container) {
         <button id="btn-show-online" class="btn btn-secondary text-base py-3.5 flex justify-center items-center gap-2">
           <span>🌐</span> Online Multiplayer
         </button>
+        ${loginButtonHtml}
         <button id="btn-tutorial" class="btn btn-secondary text-base py-3.5 flex justify-center items-center gap-2 border border-amber-500/25">
           <span>📖</span> Learn Tutorial
         </button>
@@ -83,8 +110,7 @@ function renderServerSelection(container) {
   const selectServer = card.querySelector('#select-server-url');
   const inputCustom = card.querySelector('#input-custom-server-url');
 
-  const defaultBase = import.meta.env.VITE_WS_URL || 'wss://israeli-whist-backend.fly.dev';
-  const currentSaved = localStorage.getItem('whist_server_url') || defaultBase;
+  const currentSaved = localStorage.getItem('whist_server_url') || DEFAULT_WS_URL;
 
   // Initialize dropdown options from localStorage
   if (currentSaved === 'wss://israeli-whist-backend.fly.dev') {
@@ -139,12 +165,12 @@ function renderServerSelection(container) {
   });
 
   const getWSUrl = (mode) => {
-    const savedUrl = localStorage.getItem('whist_server_url') || defaultBase;
+    const savedUrl = localStorage.getItem('whist_server_url') || DEFAULT_WS_URL;
     return `${savedUrl}?mode=${mode}`;
   };
 
   const validateAndConnect = (mode, btn) => {
-    const savedUrl = localStorage.getItem('whist_server_url') || defaultBase;
+    const savedUrl = localStorage.getItem('whist_server_url') || DEFAULT_WS_URL;
     if (!savedUrl.startsWith('ws://') && !savedUrl.startsWith('wss://')) {
       inputCustom.classList.remove('hidden');
       inputCustom.classList.add('border-rose-500');
@@ -193,8 +219,32 @@ function renderServerSelection(container) {
     }
   });
 
+  const btnLogin = card.querySelector('#btn-login');
+  const btnLogout = card.querySelector('#btn-logout');
+
+  if (btnLogin) {
+    btnLogin.addEventListener('click', () => {
+      showLoginModal();
+    });
+  }
+
+  if (btnLogout) {
+    btnLogout.addEventListener('click', () => {
+      logInteraction('Button Click: Logout Account');
+      localStorage.removeItem('whist_logged_in_username');
+      localStorage.removeItem('whist_username');
+      localStorage.removeItem('whist_password');
+      disconnect();
+      
+      const state = getState() || {};
+      state.players = [];
+      state.view_stage = 'SERVER_SELECT';
+      updateState(state);
+    });
+  }
+
   btnTutorial.addEventListener('click', () => {
-    logInteraction('Button Click: Learn Tutorial');
+    logInteraction('Button Click: Tutorial');
     startTutorial();
   });
 
@@ -818,4 +868,174 @@ function showCustomConfirm(message, callback) {
     modal.remove();
     callback();
   });
+}
+
+function showLoginModal() {
+  let modal = document.getElementById('login-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'login-modal';
+    modal.className = 'fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 pointer-events-auto';
+    document.body.appendChild(modal);
+  }
+
+  let isLoginMode = true;
+
+  const renderModalContent = () => {
+    modal.innerHTML = `
+      <div class="glass-opaque p-6 max-w-sm w-full mx-4 border border-slate-800 shadow-2xl rounded-2xl flex flex-col gap-4 text-left relative animate-fade-in">
+        <h3 id="login-modal-title" class="text-lg font-black text-white uppercase tracking-wider">
+          ${isLoginMode ? 'Account Login' : 'Create Profile'}
+        </h3>
+        <p id="login-modal-desc" class="text-xs text-slate-400">
+          ${isLoginMode ? 'Log in to your profile to use your custom username in rooms.' : 'Register a new account profile to track stats and scores.'}
+        </p>
+        
+        <!-- Inputs -->
+        <div class="flex flex-col gap-3">
+          <div class="flex flex-col gap-1">
+            <label class="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Username</label>
+            <input type="text" id="login-username" class="input w-full text-xs" placeholder="Enter username" maxlength="15" />
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Password</label>
+            <input type="password" id="login-password" class="input w-full text-xs" placeholder="Enter password" />
+          </div>
+        </div>
+        
+        <div id="login-error-msg" class="text-rose-400 text-xs font-bold hidden"></div>
+
+        <!-- Actions -->
+        <div class="flex flex-col gap-2 mt-2">
+          <button id="btn-login-submit" class="btn btn-primary text-xs py-2.5">
+            ${isLoginMode ? 'Log In' : 'Register Profile'}
+          </button>
+          <button id="btn-login-toggle" class="text-emerald-400 hover:text-emerald-300 text-xs font-bold text-center underline mt-1">
+            ${isLoginMode ? "Don't have an account? Create one" : 'Already have an account? Log in'}
+          </button>
+          <button id="btn-login-cancel" class="btn btn-secondary text-xs py-2.5 mt-1">
+            Cancel
+          </button>
+        </div>
+      </div>
+    `;
+
+    const btnSubmit = modal.querySelector('#btn-login-submit');
+    const btnToggle = modal.querySelector('#btn-login-toggle');
+    const btnCancel = modal.querySelector('#btn-login-cancel');
+    const usernameInput = modal.querySelector('#login-username');
+    const passwordInput = modal.querySelector('#login-password');
+    const errorMsg = modal.querySelector('#login-error-msg');
+
+    btnToggle.addEventListener('click', () => {
+      isLoginMode = !isLoginMode;
+      renderModalContent();
+    });
+
+    btnCancel.addEventListener('click', () => {
+      window.removeEventListener('whist_login_response', handleLoginResponse);
+      window.removeEventListener('whist_register_response', handleRegisterResponse);
+      modal.remove();
+    });
+
+    btnSubmit.addEventListener('click', () => {
+      const userVal = usernameInput.value.trim();
+      const passVal = passwordInput.value.trim();
+      if (!userVal || !passVal) {
+        errorMsg.textContent = 'Please fill out all fields.';
+        errorMsg.classList.remove('hidden');
+        return;
+      }
+      errorMsg.classList.add('hidden');
+      btnSubmit.disabled = true;
+      btnSubmit.classList.add('btn-loading');
+      btnCancel.disabled = true;
+      btnToggle.disabled = true;
+
+      const actionFn = () => {
+        window.showLoading(isLoginMode ? 'Logging in...' : 'Registering account...');
+        if (isLoginMode) {
+          window.addEventListener('whist_login_response', handleLoginResponse);
+          send({ action: 'login', username: userVal, password: passVal });
+        } else {
+          window.addEventListener('whist_register_response', handleRegisterResponse);
+          send({ action: 'register', username: userVal, password: passVal });
+        }
+      };
+
+      const status = getConnectionStatus();
+      if (status === 'connected') {
+        actionFn();
+      } else {
+        window.showLoading('Connecting to server...');
+        const savedUrl = localStorage.getItem('whist_server_url') || DEFAULT_WS_URL;
+        connect(savedUrl + `?mode=online`);
+        
+        let unsubscribe = null;
+        unsubscribe = onStatusChange((newStatus) => {
+          if (newStatus === 'connected') {
+            if (unsubscribe) unsubscribe();
+            actionFn();
+          } else if (newStatus === 'disconnected') {
+            if (unsubscribe) unsubscribe();
+            window.hideLoading();
+            btnSubmit.disabled = false;
+            btnSubmit.classList.remove('btn-loading');
+            btnCancel.disabled = false;
+            btnToggle.disabled = false;
+            errorMsg.textContent = 'Could not connect to server.';
+            errorMsg.classList.remove('hidden');
+          }
+        });
+      }
+    });
+
+    const handleLoginResponse = (e) => {
+      const data = e.detail;
+      window.removeEventListener('whist_login_response', handleLoginResponse);
+      if (data.status === 'ok') {
+        localStorage.setItem('whist_logged_in_username', data.username);
+        localStorage.setItem('whist_username', data.username);
+        localStorage.setItem('whist_password', passwordInput.value.trim());
+
+        window.hideLoading();
+        modal.remove();
+        
+        // Re-render lobby
+        const state = getState() || {};
+        state.players = [];
+        state.view_stage = 'SERVER_SELECT';
+        updateState(state);
+      } else {
+        window.hideLoading();
+        btnSubmit.disabled = false;
+        btnSubmit.classList.remove('btn-loading');
+        btnCancel.disabled = false;
+        btnToggle.disabled = false;
+        errorMsg.textContent = data.reason || 'Login failed.';
+        errorMsg.classList.remove('hidden');
+      }
+    };
+
+    const handleRegisterResponse = (e) => {
+      const data = e.detail;
+      window.removeEventListener('whist_register_response', handleRegisterResponse);
+      if (data.status === 'ok') {
+        window.hideLoading();
+        alert('Profile created successfully! Please log in.');
+        isLoginMode = true;
+        renderModalContent();
+      } else {
+        window.hideLoading();
+        btnSubmit.disabled = false;
+        btnSubmit.classList.remove('btn-loading');
+        btnCancel.disabled = false;
+        btnToggle.disabled = false;
+        errorMsg.textContent = data.reason || 'Registration failed.';
+        errorMsg.classList.remove('hidden');
+      }
+    };
+  };
+
+  renderModalContent();
 }

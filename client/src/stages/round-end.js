@@ -37,40 +37,57 @@ export function renderRoundEnd(state, container) {
       <tr class="border-b border-slate-800 text-[10px] uppercase font-bold text-slate-500 tracking-wider">
         <th class="pb-3 px-2">Player</th>
         <th class="pb-3 px-2 text-center">Bid</th>
-        <th class="pb-3 px-2 text-center">Tricks Taken</th>
-        <th class="pb-3 px-2 text-center">Status</th>
+        <th class="pb-3 px-2 text-center">Delta</th>
         <th class="pb-3 px-2 text-center">Score Change</th>
-        <th class="pb-3 px-2 text-right">Total Score</th>
+        <th class="pb-3 px-2 text-right">Current Score</th>
       </tr>
     </thead>
     <tbody class="divide-y divide-slate-800/40">
       ${players.map((p, idx) => {
         const isSelf = idx === 0;
         const tricks = p.tricks_taken || 0;
-        const bet = p.bet !== null && p.bet !== undefined ? p.bet : 0;
-        const success = tricks === bet;
+        
+        // Extract bet amount (takes) from Israeli Whist bet structure
+        const betTakes = p.bet !== null && typeof p.bet === 'object' ? p.bet.takes : p.bet;
+        const bet = betTakes !== null && betTakes !== undefined ? betTakes : 0;
+        const betNum = typeof bet === 'number' ? bet : parseInt(bet) || 0;
+        const success = tricks === betNum;
+
+        // Calculate Delta: checkmark for success, else difference (e.g. -1, +2)
+        const diff = tricks - betNum;
+        let deltaHtml = '';
+        if (success) {
+          deltaHtml = `<span class="text-emerald-400 font-extrabold">✓</span>`;
+        } else {
+          const sign = diff > 0 ? '+' : '';
+          deltaHtml = `<span class="text-rose-400 font-bold">(${sign}${diff})</span>`;
+        }
 
         // Score change (check for state.players[i].score_change or calculate mock difference)
-        // If score_change isn't provided, default to a sensible display
-        const scoreChange = p.score_change !== undefined ? p.score_change : (success ? (10 + bet * bet) : -Math.abs(bet - tricks) * 10);
+        const scoreChange = p.score_change !== undefined ? p.score_change : (success ? (10 + betNum * betNum) : -Math.abs(betNum - tricks) * 10);
         const changeSign = scoreChange >= 0 ? `+${scoreChange}` : `${scoreChange}`;
         const changeClass = scoreChange >= 0 ? 'text-emerald-400 font-extrabold' : 'text-rose-500 font-extrabold';
-
-        const statusBadge = success 
-          ? `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">Made</span>`
-          : `<span class="bg-rose-500/10 text-rose-400 border border-rose-500/25 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">Missed</span>`;
 
         let rowClass = 'text-slate-300';
         if (isSelf) rowClass = 'text-white bg-slate-800/20 font-semibold';
 
+        // Ready status indicator for next round
+        const isReady = p.status === 'Ready';
+        const readyIndicator = isReady 
+          ? `<span class="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase tracking-wider ml-2">✓ Ready</span>`
+          : `<span class="bg-slate-800 text-slate-500 border border-slate-700/30 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ml-2">Waiting</span>`;
+
         return `
           <tr class="${rowClass}">
             <td class="py-3.5 px-2 text-sm">
-              ${p.name} ${isSelf ? '<span class="text-[10px] text-slate-500 font-normal ml-1">(You)</span>' : ''}
+              <div class="flex items-center gap-1.5">
+                <span>${p.name}</span>
+                ${isSelf ? '<span class="text-[10px] text-slate-500 font-normal mr-1">(You)</span>' : ''}
+                ${readyIndicator}
+              </div>
             </td>
             <td class="py-3.5 px-2 text-center font-mono font-bold">${bet}</td>
-            <td class="py-3.5 px-2 text-center font-mono font-bold">${tricks}</td>
-            <td class="py-3.5 px-2 text-center">${statusBadge}</td>
+            <td class="py-3.5 px-2 text-center font-mono font-bold">${deltaHtml}</td>
             <td class="py-3.5 px-2 text-center font-mono ${changeClass}">${changeSign}</td>
             <td class="py-3.5 px-2 text-right font-mono font-black score-animate text-white">${p.score} <span class="text-[10px] text-slate-500 font-normal">pts</span></td>
           </tr>
