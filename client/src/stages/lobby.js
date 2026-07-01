@@ -19,6 +19,7 @@ export function renderLobby(state, container) {
 
   // If players is empty, show Server Selection / Room Browser
   if (players.length === 0) {
+    chatHistory = [];
     // If we have custom room list state or are viewing room browser
     if (state.view_stage === 'ROOM_LIST') {
       renderRoomBrowser(container, state);
@@ -39,24 +40,12 @@ function renderServerSelection(container) {
   let loginHeaderHtml = '';
   let loginButtonHtml = '';
 
-  if (loggedInUser) {
-    loginHeaderHtml = `
-      <div class="glass-sm px-3.5 py-2.5 flex items-center justify-between gap-2 w-full mb-3.5 rounded-xl border border-emerald-500/20">
-        <div class="flex items-center gap-2 text-xs font-bold text-emerald-400 min-w-0">
-          <span>👤</span>
-          <span class="text-slate-400 font-medium">User:</span>
-          <span class="font-extrabold text-white truncate max-w-[120px]">${loggedInUser}</span>
-        </div>
-        <button id="btn-logout" class="text-rose-400 hover:text-rose-300 font-extrabold uppercase text-[9px] tracking-wider border border-rose-500/35 px-2 py-0.5 rounded hover:bg-rose-950/20 transition-all shrink-0">Logout</button>
-      </div>
-    `;
-  } else {
-    loginButtonHtml = `
-      <button id="btn-login" class="btn btn-secondary text-base py-3.5 flex justify-center items-center gap-2">
-        <span>👤</span> Account Login / Create
-      </button>
-    `;
-  }
+  // Account login is greyed out per request, but we still show a disabled state
+  loginButtonHtml = `
+    <button id="btn-login" class="btn btn-secondary text-base py-3.5 flex justify-center items-center gap-2 opacity-50 cursor-not-allowed text-slate-500" disabled>
+      <span>👤</span> Account Login / Create (Disabled)
+    </button>
+  `;
 
   card.innerHTML = `
     <!-- Floating decorative suit symbols -->
@@ -64,13 +53,17 @@ function renderServerSelection(container) {
     <div class="absolute -bottom-10 -right-10 text-9xl text-slate-700/5 select-none font-bold">♥</div>
     <div class="absolute top-1/2 right-4 text-6xl text-slate-700/5 select-none font-bold">♦</div>
     <div class="absolute top-1/3 left-4 text-6xl text-slate-700/5 select-none font-bold">♣</div>
-
+ 
     <div class="relative z-10 w-full flex flex-col items-center">
       <h1 class="text-5xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-400 to-blue-500 mb-2">WHIST</h1>
       <div class="text-[10px] uppercase font-black tracking-widest text-emerald-400/80 mb-4 bg-emerald-950/40 px-2 py-0.5 rounded">Israeli Edition</div>
       <p class="text-slate-400 text-sm mb-4">A classic trick-taking card game. Choose a connection option to start.</p>
 
-      ${loginHeaderHtml}
+      <!-- Player Nickname Selection -->
+      <div class="flex flex-col gap-1.5 w-full mb-3.5 text-left relative z-20">
+        <label class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Your Nickname</label>
+        <input type="text" id="input-player-nickname" class="input w-full text-xs bg-slate-900 border border-slate-700 rounded text-slate-200 py-2.5 px-3 font-semibold" placeholder="Enter your name" maxlength="15" />
+      </div>
 
       <!-- Server Connection Selection -->
       <div class="flex flex-col gap-1.5 w-full mb-5 text-left relative z-20">
@@ -92,7 +85,7 @@ function renderServerSelection(container) {
         </button>
         ${loginButtonHtml}
         <button id="btn-tutorial" class="btn btn-secondary text-base py-3.5 flex justify-center items-center gap-2 border border-amber-500/25">
-          <span>📖</span> Learn Tutorial
+          <span>📖</span> Tutorial
         </button>
         <button id="btn-main-settings" class="btn btn-secondary text-base py-3.5 flex justify-center items-center gap-2">
           <span>⚙️</span> Game Settings
@@ -109,8 +102,16 @@ function renderServerSelection(container) {
   const btnMainSettings = card.querySelector('#btn-main-settings');
   const selectServer = card.querySelector('#select-server-url');
   const inputCustom = card.querySelector('#input-custom-server-url');
+  const inputNickname = card.querySelector('#input-player-nickname');
 
   const currentSaved = localStorage.getItem('whist_server_url') || DEFAULT_WS_URL;
+  const savedNickname = localStorage.getItem('whist_nickname') || 'Player';
+  inputNickname.value = savedNickname;
+
+  inputNickname.addEventListener('input', () => {
+    const val = inputNickname.value.trim();
+    localStorage.setItem('whist_nickname', val || 'Player');
+  });
 
   // Initialize dropdown options from localStorage
   if (currentSaved === 'wss://israeli-whist-backend.fly.dev') {
@@ -166,7 +167,9 @@ function renderServerSelection(container) {
 
   const getWSUrl = (mode) => {
     const savedUrl = localStorage.getItem('whist_server_url') || DEFAULT_WS_URL;
-    return `${savedUrl}?mode=${mode}`;
+    const nickname = inputNickname.value.trim() || 'Player';
+    localStorage.setItem('whist_nickname', nickname);
+    return `${savedUrl}?mode=${mode}&username=${encodeURIComponent(nickname)}`;
   };
 
   const validateAndConnect = (mode, btn) => {

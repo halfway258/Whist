@@ -138,7 +138,11 @@ make_state_map(State, ViewerId) ->
         fun(P) ->
             PId = maps:get(~"id", P),
             PHand = maps:get(PId, State#rules_state.hands, []),
-            P#{~"hand_size" => length(PHand)}
+            BaseMap = P#{~"hand_size" => length(PHand)},
+            case ViewerId of
+                ~"spectator" -> BaseMap#{~"hand" => PHand};
+                _ -> BaseMap
+            end
         end,
         State#rules_state.players
     ),
@@ -165,6 +169,7 @@ make_state_map(State, ViewerId) ->
     end,
     #{
         ~"current_stage" => StageStr,
+        ~"is_spectator" => (ViewerId =:= ~"spectator"),
         ~"game_stats" => #{
             ~"round" => State#rules_state.round,
             ~"target_score" => maps:get(~"target_score", State#rules_state.settings, State#rules_state.target_score),

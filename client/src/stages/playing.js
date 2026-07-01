@@ -11,7 +11,8 @@ export function renderPlaying(state, container) {
   container.innerHTML = '';
 
   const players = state.players || [];
-  const localPlayer = players[0] || { id: 'p1', is_turn: false };
+  const isSpectator = state.is_spectator === true;
+  const localPlayer = isSpectator ? { id: 'p1', is_turn: false } : (players[0] || { id: 'p1', is_turn: false });
   const tableCards = state.table_cards || [];
   const myHand = state.my_hand || [];
 
@@ -74,14 +75,14 @@ export function renderPlaying(state, container) {
             // Add a small player initials badge below the card
             const initialsBadge = document.createElement('div');
             initialsBadge.className = 'text-[9px] font-bold text-slate-300 uppercase mt-1 bg-slate-950/60 px-1.5 py-0.5 rounded';
-            initialsBadge.textContent = seatIdx === 0 ? 'You' : player.name;
+            initialsBadge.textContent = seatIdx === 0 && !isSpectator ? 'You' : player.name;
             cell.appendChild(initialsBadge);
           } else {
             // Empty placeholder for player who hasn't played yet
             cell.className += ' border-2 border-dashed border-slate-700/30 rounded-lg flex items-center justify-center';
             cell.innerHTML = `
               <div class="text-[9px] font-black text-slate-600 uppercase text-center">
-                ${seatIdx === 0 ? 'You' : player.name}
+                ${seatIdx === 0 && !isSpectator ? 'You' : player.name}
               </div>
             `;
           }

@@ -16,13 +16,21 @@ init(Req, _State) ->
         {_, ~"offline"} -> offline;
         _ -> online
     end,
+    Username = case lists:keyfind(~"username", 1, QsVals) of
+        {_, UserVal} when UserVal =/= <<>> -> UserVal;
+        _ -> null
+    end,
     Opts = #{idle_timeout => 86400000},
-    {cowboy_websocket, Req, #ws_state{mode = Mode}, Opts}.
+    {cowboy_websocket, Req, #ws_state{mode = Mode, username = Username}, Opts}.
 
 %% @doc Initialize the WebSocket state. Spawns offline bot game immediately if requested.
-websocket_init(#ws_state{mode = offline} = State) ->
+websocket_init(#ws_state{mode = offline, username = Username} = State) ->
     {ok, GamePid} = whist_game:start_link(~"offline", offline),
-    ok = gen_server:call(GamePid, {join, self(), ~"player"}),
+    Role = case Username of
+        null -> ~"You";
+        User -> User
+    end,
+    ok = gen_server:call(GamePid, {join, self(), Role}),
     {ok, State#ws_state{game_pid = GamePid, room_id = ~"offline"}};
 websocket_init(State) ->
     {ok, State}.

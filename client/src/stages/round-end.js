@@ -98,17 +98,24 @@ export function renderRoundEnd(state, container) {
   tableCard.appendChild(table);
   overlay.appendChild(tableCard);
 
-  // 3. Ready Action Button
-  const readyBtn = document.createElement('button');
-  readyBtn.className = 'btn btn-primary text-base px-8 py-3 relative z-10 flex items-center gap-2';
-  readyBtn.innerHTML = '<span>Next Round</span> <span>→</span>';
-  readyBtn.addEventListener('click', () => {
-    logInteraction('Button Click: Ready for Next Round');
-    readyBtn.disabled = true;
-    readyBtn.textContent = 'Waiting for players...';
-    send({ action: 'ready_next_round' });
-  });
-  overlay.appendChild(readyBtn);
+  if (state.is_spectator === true) {
+    const specBanner = document.createElement('div');
+    specBanner.className = 'glass-sm px-6 py-3 text-xs font-extrabold text-slate-400 uppercase tracking-widest relative z-10';
+    specBanner.textContent = 'Spectating — Waiting for next round...';
+    overlay.appendChild(specBanner);
+  } else {
+    // 3. Ready Action Button
+    const readyBtn = document.createElement('button');
+    readyBtn.className = 'btn btn-primary text-base px-8 py-3 relative z-10 flex items-center gap-2';
+    readyBtn.innerHTML = '<span>Next Round</span> <span>→</span>';
+    readyBtn.addEventListener('click', () => {
+      logInteraction('Button Click: Ready for Next Round');
+      readyBtn.disabled = true;
+      readyBtn.textContent = 'Waiting for players...';
+      send({ action: 'ready_next_round' });
+    });
+    overlay.appendChild(readyBtn);
+  }
 
   container.appendChild(overlay);
 }

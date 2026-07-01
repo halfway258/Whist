@@ -140,7 +140,11 @@ handle_call({join, ConnPid, Role}, _From, State) ->
                         _ ->
                             PlayerId = list_to_binary(io_lib:format("p~p", [PlayersCount + 1])),
                             Name = case State#game_session_state.mode of
-                                offline -> ~"You";
+                                offline ->
+                                    case Role of
+                                        ~"player" -> ~"You";
+                                        Username -> Username
+                                    end;
                                 online ->
                                     case Role of
                                         ~"player" -> list_to_binary(io_lib:format("Player ~p", [PlayersCount + 1]));
@@ -530,7 +534,9 @@ handle_player_action(~"bet", PlayerId, Msg, State) ->
                     broadcast_state(NewState),
                     schedule_bot_action(NewRulesState),
                     {noreply, NewState};
-                 {error, _Reason} ->
+                 {error, Reason} ->
+                    ReasonBin = list_to_binary(atom_to_list(Reason)),
+                    send_error_to_player(PlayerId, ~"invalid_bid", ReasonBin, State),
                     {noreply, State}
             end;
         false ->
@@ -554,7 +560,9 @@ handle_player_action(~"exchange_cards", PlayerId, Msg, State) ->
                             ok
                     end,
                     {noreply, NewState};
-                {error, _Reason} ->
+                 {error, Reason} ->
+                    ReasonBin = list_to_binary(atom_to_list(Reason)),
+                    send_error_to_player(PlayerId, ~"invalid_exchange", ReasonBin, State),
                     {noreply, State}
             end;
         false ->

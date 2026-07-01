@@ -22,3 +22,4 @@ src-tauri
 ios
 node_modules
 android
+client/client-prod.zip

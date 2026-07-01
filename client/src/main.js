@@ -105,7 +105,8 @@ function boot() {
     }
   });
 
-  // Auto-login on connection if credentials exist
+  // Auto-login disabled since account login is greyed out
+  /*
   onStatusChange((status) => {
     if (status === 'connected') {
       const savedUser = localStorage.getItem('whist_username');
@@ -115,6 +116,7 @@ function boot() {
       }
     }
   });
+  */
 
   // Initialize cleanly into the lobby stage
   const cleanLobbyState = {

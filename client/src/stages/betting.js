@@ -11,7 +11,8 @@ export function renderBetting(state, container) {
   container.innerHTML = '';
 
   const players = state.players || [];
-  const localPlayer = players[0] || { name: 'You', is_turn: false };
+  const isSpectator = state.is_spectator === true;
+  const localPlayer = isSpectator ? { name: 'Spectator', is_turn: false } : (players[0] || { name: 'You', is_turn: false });
   const promptData = state.prompt_data || { bidding_stage: 'SUIT', min_bet: 5, max_bet: 13 };
   const myHand = state.my_hand || [];
   const biddingStage = (promptData.bidding_stage || 'SUIT').toUpperCase();
@@ -47,11 +48,13 @@ export function renderBetting(state, container) {
       `;
     }
   } else {
+    const activePlayer = players.find(p => p.is_turn);
+    const activeName = activePlayer ? activePlayer.name : 'other players';
     centerText.innerHTML = `
       <div class="text-xs uppercase font-extrabold tracking-widest text-amber-500/60 mb-2">Waiting For Players</div>
       <div class="text-sm font-semibold text-slate-400 flex items-center justify-center gap-1">
-        <span>Opponents are making their choices</span>
-        <span class="inline-flex">
+        <span>Waiting for <span class="text-amber-400 font-extrabold">${activeName}</span> to make a choice</span>
+        <span class="inline-flex items-center">
           <span class="thinking-dot"></span>
           <span class="thinking-dot"></span>
           <span class="thinking-dot"></span>

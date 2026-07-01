@@ -83,14 +83,16 @@ bet_stage1(PlayerId, Takes, Suit, State) ->
                 consecutive_skips = NewConsecutiveSkips
             },
             
+            CountSkips = length([P || P <- NewPlayers, maps:get(~"bet", P) =:= ~"skip"]),
+            
             %% Check if Stage 1 is complete (3 passes after a bid)
-            case NewConsecutiveSkips =:= 3 andalso State#rules_state.max_bid =/= null of
+            case CountSkips =:= 3 andalso State#rules_state.max_bid =/= null of
                 true ->
                     %% Transition to Stage 2 (Takes Bidding)
                     transition_to_stage2(TempState);
                 false ->
                     %% Check if all 4 skipped at the start
-                    case NewConsecutiveSkips =:= 4 andalso State#rules_state.max_bid =:= null of
+                    case CountSkips =:= 4 andalso State#rules_state.max_bid =:= null of
                         true ->
                             ExchangeCount = maps:get(~"exchange_cards_count", TempState#rules_state.settings, 2),
                             case ExchangeCount > 0 of
@@ -149,7 +151,13 @@ bet_stage1(PlayerId, Takes, Suit, State) ->
                         consecutive_skips = 0
                     },
                     
-                    advance_stage1_turn(PlayerId, TempState);
+                    CountSkips = length([P || P <- NewPlayers, maps:get(~"bet", P) =:= ~"skip"]),
+                    case CountSkips =:= 3 of
+                        true ->
+                            transition_to_stage2(TempState);
+                        false ->
+                            advance_stage1_turn(PlayerId, TempState)
+                    end;
                     
                 false ->
                     {error, invalid_bid}
@@ -327,7 +335,7 @@ get_prev_player_id(~"p3") -> ~"p2";
 get_prev_player_id(~"p4") -> ~"p3".
 
 advance_stage1_turn(PlayerId, State) ->
-    NextId = whist_utils:get_next_player_id(PlayerId),
+    NextId = find_next_active_stage1_player(PlayerId, State),
     NewPlayers = [
         case maps:get(~"id", P) of
             NextId ->
@@ -353,6 +361,16 @@ advance_stage1_turn(PlayerId, State) ->
         current_turn = NextId,
         prompt_data = #{~"bidding_stage" => ~"suit", ~"min_bet" => MinTakes, ~"max_bet" => 13}
     }}.
+
+find_next_active_stage1_player(PlayerId, State) ->
+    NextId = whist_utils:get_next_player_id(PlayerId),
+    [NextPlayer] = [P || P <- State#rules_state.players, maps:get(~"id", P) =:= NextId],
+    case maps:get(~"bet", NextPlayer) of
+        ~"skip" ->
+            find_next_active_stage1_player(NextId, State);
+        _ ->
+            NextId
+    end.
 
 transition_to_stage2(State) ->
     MaxBid = State#rules_state.max_bid,

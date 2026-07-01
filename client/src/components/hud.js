@@ -1,5 +1,5 @@
 import { getConnectionStatus } from '../network.js';
-import { renderCardBack } from './cards.js';
+import { renderCardBack, renderCard } from './cards.js';
 import { toggleSettingsMenu } from './settings.js';
 import { logInteraction } from '../logger.js';
 
@@ -88,7 +88,7 @@ export function renderHUD(state, container) {
   const layoutClasses = [
     'bottom-28 left-2 md:bottom-32 md:left-6',                        // Player 0 (Bottom-Left)
     'left-2 md:left-6 top-[35%] -translate-y-1/2',      // Player 1 (Left)
-    'top-2 md:top-4 left-1/2 -translate-x-1/2',        // Player 2 (Top)
+    'top-2 right-[124px] md:top-4 md:left-1/2 md:-translate-x-1/2 md:right-auto',        // Player 2 (Top)
     'right-2 md:right-6 top-[35%] -translate-y-1/2'       // Player 3 (Right)
   ];
 
@@ -98,7 +98,7 @@ export function renderHUD(state, container) {
     const player = players[i];
     if (!player) continue;
 
-    const isLocal = i === 0;
+    const isLocal = i === 0 && !state.is_spectator;
     const isTurn = player.is_turn;
     const isThinking = player.status === 'Thinking...';
 
@@ -160,7 +160,7 @@ export function renderHUD(state, container) {
     }
 
     const showOppCards = localStorage.getItem('whist_show_opp_cards') !== 'false';
-    const showHandSim = showOppCards && (currentStage === 'PLAYING' || currentStage === 'BETTING') && !isLocal;
+    const showHandSim = (showOppCards || state.is_spectator === true) && (currentStage === 'PLAYING' || currentStage === 'BETTING') && !isLocal;
 
     // Render opponent hand count badge directly in the cardBody on mobile
     let compactHandDisplay = '';
@@ -173,24 +173,38 @@ export function renderHUD(state, container) {
       `;
     }
 
+    let turnLabel = '';
+    if (isTurn) {
+      if (isLocal) {
+        turnLabel = 'Your Turn';
+      } else {
+        if (currentStage === 'BETTING') turnLabel = 'Bidding...';
+        else if (currentStage === 'PLAYING') turnLabel = 'Playing...';
+        else turnLabel = 'Thinking...';
+      }
+    }
+
     cardBody.innerHTML = `
       <div class="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-wide truncate max-w-[80px] md:max-w-[120px]">${isLocal ? 'You' : player.name}</div>
       <div class="text-sm md:text-lg font-black text-white font-mono mt-0.5">${player.score} <span class="text-[9px] md:text-xs text-amber-400 font-normal">Score</span></div>
       ${tricksDisplay}
       ${compactHandDisplay}
-      ${isTurn ? '<div class="text-[8px] md:text-[9px] text-emerald-400 font-extrabold uppercase tracking-wider animate-pulse mt-1">Your Turn</div>' : ''}
+      ${isTurn ? `<div class="text-[8px] md:text-[9px] ${isLocal ? 'text-emerald-400' : 'text-amber-400'} font-extrabold uppercase tracking-wider animate-pulse mt-1">${turnLabel}</div>` : ''}
     `;
 
     playerEl.appendChild(cardBody);
 
-    // Render opponent hand simulation if on desktop
-    if (showHandSim && !isMobile && player.hand_size !== undefined) {
+    // Render opponent hand simulation if on desktop or if spectating (always visible for spectators)
+    if (showHandSim && (!isMobile || state.is_spectator) && player.hand_size !== undefined) {
       const handSimContainer = document.createElement('div');
       
       // Position fanned cards at screen edges
       let positionClass = '';
       let baseRotation = 0;
-      if (i === 1) { // Left
+      if (i === 0) { // Bottom
+        positionClass = 'absolute bottom-4 left-32 md:left-40';
+        baseRotation = 0;
+      } else if (i === 1) { // Left
         positionClass = 'absolute -left-4 top-[35%] -translate-y-1/2';
         baseRotation = 90;
       } else if (i === 2) { // Top
@@ -211,9 +225,23 @@ export function renderHUD(state, container) {
         cardContainer.style.transform = `rotate(${baseRotation}deg)`;
       }
       
+      // Sort hand if it is visible to spectator
+      const sortedHand = player.hand ? [...player.hand].sort((a, b) => {
+        const SUIT_ORDER = { clubs: 0, diamonds: 1, spades: 2, hearts: 3 };
+        const orderA = SUIT_ORDER[a.suit] !== undefined ? SUIT_ORDER[a.suit] : 99;
+        const orderB = SUIT_ORDER[b.suit] !== undefined ? SUIT_ORDER[b.suit] : 99;
+        if (orderA !== orderB) return orderA - orderB;
+        return b.value - a.value;
+      }) : null;
+      
       for (let c = 0; c < handSize; c++) {
-        const cardBack = renderCardBack({ mini: true });
-        cardBack.style.position = 'absolute';
+        let cardEl;
+        if (sortedHand && sortedHand[c]) {
+          cardEl = renderCard(sortedHand[c], { mini: true });
+        } else {
+          cardEl = renderCardBack({ mini: true });
+        }
+        cardEl.style.position = 'absolute';
         
         // Overlapping offset
         const centerIdx = (handSize - 1) / 2;
@@ -223,14 +251,14 @@ export function renderHUD(state, container) {
         const rotation = (c - centerIdx) * 2;
         transform += ` rotate(${rotation}deg)`;
         
-        cardBack.style.transform = transform;
-        cardBack.style.transformOrigin = '50% 100%';
-        cardBack.style.zIndex = c;
+        cardEl.style.transform = transform;
+        cardEl.style.transformOrigin = '50% 100%';
+        cardEl.style.zIndex = c;
         
-        cardContainer.appendChild(cardBack);
+        cardContainer.appendChild(cardEl);
       }
       handSimContainer.appendChild(cardContainer);
-      container.appendChild(handSimContainer); // Appended directly to HUD full-screen container (behind playerEl which is z-20)
+      container.appendChild(handSimContainer);
     }
 
     container.appendChild(playerEl);
