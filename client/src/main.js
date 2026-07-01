@@ -17,6 +17,23 @@ import { renderGameOver } from './stages/game-over.js';
 // Components
 import { renderHUD } from './components/hud.js';
 
+// ─── Global Loading Helpers ───
+window.showLoading = (message) => {
+  const overlay = document.getElementById('loading-overlay');
+  const text = document.getElementById('loading-text');
+  if (overlay && text) {
+    text.textContent = message || 'Loading...';
+    overlay.classList.add('active');
+  }
+};
+
+window.hideLoading = () => {
+  const overlay = document.getElementById('loading-overlay');
+  if (overlay) {
+    overlay.classList.remove('active');
+  }
+};
+
 // ─── Boot ───
 function boot() {
   // Load settings from local storage and apply them to the DOM
@@ -47,6 +64,7 @@ function boot() {
   // Subscribe to state changes → route + render HUD
   subscribe((state) => {
     routeState(state);
+    window.hideLoading();
 
     // Render HUD for gameplay stages
     const hudEl = document.getElementById('hud');

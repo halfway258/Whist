@@ -23,7 +23,7 @@ export function renderBetting(state, container) {
 
   // 1. Table Felt Area
   const table = document.createElement('div');
-  table.className = 'table-felt w-full max-w-4xl flex-1 rounded-[40px] relative overflow-hidden flex flex-col items-center justify-center min-h-[220px] my-4';
+  table.className = 'table-felt w-full max-w-4xl flex-1 rounded-[40px] relative overflow-hidden flex flex-col items-center justify-center min-h-[220px] mt-16 md:mt-24 mb-4';
   
   // Decorative text in the center
   const centerText = document.createElement('div');
@@ -68,7 +68,7 @@ export function renderBetting(state, container) {
   // 2. Action Overlay (Only if it's our turn)
   if (localPlayer.is_turn) {
     const overlay = document.createElement('div');
-    overlay.className = 'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 glass p-6 max-w-md w-full shadow-2xl flex flex-col items-center border border-emerald-500/20';
+    overlay.className = 'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 glass-opaque p-6 max-w-md w-full shadow-2xl flex flex-col items-center border border-emerald-500/20';
 
     if (isExchange) {
       overlay.innerHTML = `
@@ -86,6 +86,7 @@ export function renderBetting(state, container) {
           logInteraction(`Button Click: Confirm Exchange (cards: ${JSON.stringify(selectedCards)})`);
           // Disable overlay controls
           confirmBtn.disabled = true;
+          confirmBtn.classList.add('btn-loading');
           overlay.querySelector('h3').textContent = 'Submitting...';
           send({ action: 'exchange_cards', cards: selectedCards });
         }
@@ -158,6 +159,7 @@ export function renderBetting(state, container) {
         logInteraction(`Button Click: Confirm Suit Bid (takes: ${takes}, suit: "${selectedSuit}")`);
         confirmBtn.disabled = true;
         skipBtn.disabled = true;
+        confirmBtn.classList.add('btn-loading');
         overlay.querySelector('h3').textContent = 'Submitting...';
         send({ action: 'bet', takes, suit: selectedSuit });
       });
@@ -166,6 +168,7 @@ export function renderBetting(state, container) {
         logInteraction('Button Click: Skip Suit Bid');
         confirmBtn.disabled = true;
         skipBtn.disabled = true;
+        skipBtn.classList.add('btn-loading');
         overlay.querySelector('h3').textContent = 'Skipping...';
         send({ action: 'bet', takes: 0, suit: 'skip' });
       });
@@ -230,6 +233,7 @@ export function renderBetting(state, container) {
         logInteraction(`Button Click: Confirm Takes Bid (takes: ${val})`);
         confirmBtn.disabled = true;
         slider.disabled = true;
+        confirmBtn.classList.add('btn-loading');
         overlay.querySelector('h3').textContent = 'Confirming...';
         send({ action: 'bet', takes: val });
       });

@@ -32,7 +32,7 @@ export function renderLobby(state, container) {
 
 function renderServerSelection(container) {
   const card = document.createElement('div');
-  card.className = 'glass p-8 md:p-10 max-w-md w-full mx-4 flex flex-col items-center text-center shadow-2xl relative overflow-hidden';
+  card.className = 'glass-opaque p-8 md:p-10 max-w-md w-full mx-4 flex flex-col items-center text-center shadow-2xl relative overflow-hidden';
   
   card.innerHTML = `
     <!-- Floating decorative suit symbols -->
@@ -129,9 +129,12 @@ function renderServerSelection(container) {
   window._lobbyStatusUnsubscribe = onStatusChange((status) => {
     if (status === 'disconnected') {
       btnOffline.disabled = false;
+      btnOffline.classList.remove('btn-loading');
       btnOffline.textContent = '⚡ Play Offline vs Bots';
       btnShowOnline.disabled = false;
+      btnShowOnline.classList.remove('btn-loading');
       btnShowOnline.textContent = '🌐 Online Multiplayer';
+      window.hideLoading();
     }
   });
 
@@ -158,7 +161,8 @@ function renderServerSelection(container) {
   btnOffline.addEventListener('click', () => {
     logInteraction('Button Click: Play Offline vs Bots');
     btnOffline.disabled = true;
-    btnOffline.textContent = 'Connecting...';
+    btnOffline.classList.add('btn-loading');
+    window.showLoading('Starting Offline Match...');
     if (validateAndConnect('offline', btnOffline)) {
       const state = getState() || {};
       state.mode = 'offline';
@@ -169,7 +173,8 @@ function renderServerSelection(container) {
   btnShowOnline.addEventListener('click', () => {
     logInteraction('Button Click: Online Multiplayer');
     btnShowOnline.disabled = true;
-    btnShowOnline.textContent = 'Connecting...';
+    btnShowOnline.classList.add('btn-loading');
+    window.showLoading('Connecting to Online Lobby...');
     
     if (validateAndConnect('online', btnShowOnline)) {
       const state = getState() || {};
@@ -202,7 +207,7 @@ function renderServerSelection(container) {
 function renderRoomBrowser(container, state) {
   const rooms = state.rooms || [];
   const card = document.createElement('div');
-  card.className = 'glass p-8 max-w-2xl w-full mx-4 flex flex-col shadow-2xl relative z-10 max-h-[90vh] overflow-hidden';
+  card.className = 'glass-opaque p-8 max-w-2xl w-full mx-4 flex flex-col shadow-2xl relative z-10 max-h-[90vh] overflow-hidden';
 
   card.innerHTML = `
     <!-- Header -->
@@ -273,7 +278,7 @@ function renderRoomBrowser(container, state) {
 
     <!-- Sleek Password Modal (Hidden by Default) -->
     <div id="password-modal" class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center hidden z-30">
-      <div class="glass p-6 max-w-sm w-full mx-4 border border-slate-800 flex flex-col items-center text-center">
+      <div class="glass-opaque p-6 max-w-sm w-full mx-4 border border-slate-800 flex flex-col items-center text-center">
         <h3 class="text-lg font-black text-white uppercase tracking-wider mb-1">Enter Room Token</h3>
         <p class="text-xs text-slate-400 mb-6">This room requires a password or private access key.</p>
         
@@ -288,7 +293,7 @@ function renderRoomBrowser(container, state) {
 
     <!-- Sleek Create Room Modal (Hidden by Default) -->
     <div id="create-room-modal" class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center hidden z-30">
-      <div class="glass p-6 max-w-sm w-full mx-4 border border-slate-800 flex flex-col items-center text-center">
+      <div class="glass-opaque p-6 max-w-sm w-full mx-4 border border-slate-800 flex flex-col items-center text-center">
         <h3 class="text-lg font-black text-white uppercase tracking-wider mb-1">Create Room</h3>
         <p class="text-xs text-slate-400 mb-6">Set up your private or public Israeli Whist match.</p>
         
@@ -355,7 +360,12 @@ function renderRoomBrowser(container, state) {
     const rPass = createPassInput.value.trim();
 
     logInteraction(`Button Click: Create Room (name: "${rName}", private: ${!!rPass})`);
-    createModal.classList.add('hidden');
+    createSubmit.disabled = true;
+    createCancel.disabled = true;
+    createNameInput.disabled = true;
+    createPassInput.disabled = true;
+    createSubmit.classList.add('btn-loading');
+    window.showLoading('Creating Room...');
 
     send({
       action: 'create_room',
@@ -374,7 +384,15 @@ function renderRoomBrowser(container, state) {
 
   btnRefresh.addEventListener('click', () => {
     logInteraction('Button Click: Refresh Rooms List');
+    btnRefresh.disabled = true;
+    btnRefresh.classList.add('btn-loading');
     send({ action: 'list_rooms' });
+    setTimeout(() => {
+      if (btnRefresh && btnRefresh.disabled) {
+        btnRefresh.disabled = false;
+        btnRefresh.classList.remove('btn-loading');
+      }
+    }, 3000);
   });
 
   // Wire Join and Spectate buttons
@@ -390,6 +408,9 @@ function renderRoomBrowser(container, state) {
         modal.classList.remove('hidden');
         passwordInput.focus();
       } else {
+        card.querySelectorAll('.btn-join, .btn-spectate').forEach(b => b.disabled = true);
+        btn.classList.add('btn-loading');
+        window.showLoading('Joining Room...');
         submitJoinRoom(selectedRoom, '', selectedRole);
       }
     });
@@ -407,6 +428,9 @@ function renderRoomBrowser(container, state) {
         modal.classList.remove('hidden');
         passwordInput.focus();
       } else {
+        card.querySelectorAll('.btn-join, .btn-spectate').forEach(b => b.disabled = true);
+        btn.classList.add('btn-loading');
+        window.showLoading('Joining as Spectator...');
         submitJoinRoom(selectedRoom, '', selectedRole);
       }
     });
@@ -421,7 +445,11 @@ function renderRoomBrowser(container, state) {
     const pass = passwordInput.value.trim();
     if (!pass) return;
     logInteraction('Button Click: Submit Password Modal');
-    modal.classList.add('hidden');
+    modalSubmit.disabled = true;
+    modalCancel.disabled = true;
+    passwordInput.disabled = true;
+    modalSubmit.classList.add('btn-loading');
+    window.showLoading('Joining Room...');
     submitJoinRoom(selectedRoom, pass, selectedRole);
   });
 
@@ -444,9 +472,9 @@ function renderWaitingRoom(players, container, state) {
   const showChat = localStorage.getItem('whist_show_chat') !== 'false';
   const card = document.createElement('div');
   if (showChat) {
-    card.className = 'glass p-8 max-w-4xl w-full mx-4 flex flex-col md:flex-row gap-6 shadow-2xl relative rounded-2xl';
+    card.className = 'glass-opaque p-8 max-w-4xl w-full mx-4 flex flex-col md:flex-row gap-6 shadow-2xl relative rounded-2xl';
   } else {
-    card.className = 'glass p-8 max-w-xl w-full mx-4 flex flex-col gap-6 shadow-2xl relative rounded-2xl';
+    card.className = 'glass-opaque p-8 max-w-xl w-full mx-4 flex flex-col gap-6 shadow-2xl relative rounded-2xl';
   }
 
   const count = players.length;
@@ -507,7 +535,7 @@ function renderWaitingRoom(players, container, state) {
             let badgeClass = isHost ? 'text-amber-400 border-amber-500/30 bg-amber-950/20' : (isReady ? 'text-emerald-400 border-emerald-500/20 bg-emerald-950/10' : 'text-slate-500 border-slate-800 bg-slate-900/40');
             
             return `
-              <div class="glass-sm px-3 py-4 flex flex-col items-center border border-slate-800 hover:border-slate-700 hover:scale-[1.02] transition-all cursor-pointer player-card" data-id="${player.id}" data-name="${player.name}">
+              <div class="glass-opaque px-3 py-4 flex flex-col items-center border border-slate-800 hover:border-slate-700 hover:scale-[1.02] transition-all cursor-pointer player-card" data-id="${player.id}" data-name="${player.name}">
                 <div class="w-9 h-9 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-base mb-2">
                   ${player.name.charAt(0).toUpperCase()}
                 </div>
@@ -517,7 +545,7 @@ function renderWaitingRoom(players, container, state) {
             `;
           } else {
             return `
-              <div class="glass-sm px-3 py-4 flex flex-col items-center opacity-40 border border-slate-700/30 border-dashed animate-pulse">
+              <div class="glass-opaque px-3 py-4 flex flex-col items-center opacity-40 border border-slate-700/30 border-dashed animate-pulse">
                 <div class="w-9 h-9 rounded-full bg-slate-800 text-slate-600 flex items-center justify-center font-bold text-base mb-2">
                   ?
                 </div>
@@ -637,6 +665,7 @@ function renderWaitingRoom(players, container, state) {
     btnExit.addEventListener('click', () => {
       logInteraction('Button Click: Exit Room');
       btnExit.disabled = true;
+      btnExit.classList.add('btn-loading');
       send({ action: 'leave_room' });
 
       chatHistory = [];
@@ -655,6 +684,8 @@ function renderWaitingRoom(players, container, state) {
   if (btnReady) {
     btnReady.addEventListener('click', () => {
       logInteraction('Button Click: Ready Up / Unready');
+      btnReady.disabled = true;
+      btnReady.classList.add('btn-loading');
       send({ action: 'ready_toggle' });
     });
   }
@@ -665,6 +696,7 @@ function renderWaitingRoom(players, container, state) {
       showCustomConfirm('Are you sure you want to close this room? All players will be disconnected.', () => {
         logInteraction('Button Click: Confirm Close Room');
         btnClose.disabled = true;
+        btnClose.classList.add('btn-loading');
         send({ action: 'close_room' });
       });
     });
@@ -674,6 +706,7 @@ function renderWaitingRoom(players, container, state) {
     btnStart.addEventListener('click', () => {
       logInteraction('Button Click: Start Game Early (with bots)');
       btnStart.disabled = true;
+      btnStart.classList.add('btn-loading');
       btnStart.textContent = 'Starting...';
       send({ action: 'start_game' });
     });
@@ -720,7 +753,7 @@ function showPlayerInfoModal(playerId, playerName) {
   modal.className = 'fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 pointer-events-auto';
   
   modal.innerHTML = `
-    <div class="glass p-6 max-w-sm w-full mx-4 border border-slate-800 flex flex-col items-center text-center shadow-2xl relative rounded-2xl animate-fade-in">
+    <div class="glass-opaque p-6 max-w-sm w-full mx-4 border border-slate-800 flex flex-col items-center text-center shadow-2xl relative rounded-2xl animate-fade-in">
       <div class="w-16 h-16 rounded-full bg-amber-500/10 text-amber-400 flex items-center justify-center font-bold text-3xl mb-4 border border-amber-500/25">
         ${playerName.charAt(0).toUpperCase()}
       </div>
@@ -763,7 +796,7 @@ function showCustomConfirm(message, callback) {
   const modal = document.createElement('div');
   modal.className = 'fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 pointer-events-auto';
   modal.innerHTML = `
-    <div class="glass p-6 max-w-sm w-full mx-4 border border-slate-800 flex flex-col items-center text-center shadow-2xl rounded-2xl animate-fade-in">
+    <div class="glass-opaque p-6 max-w-sm w-full mx-4 border border-slate-800 flex flex-col items-center text-center shadow-2xl rounded-2xl animate-fade-in">
       <h3 class="text-base font-extrabold text-white mb-2">Confirm Action</h3>
       <p class="text-xs text-slate-400 mb-6 leading-relaxed">${message}</p>
       <div class="flex gap-3 w-full">

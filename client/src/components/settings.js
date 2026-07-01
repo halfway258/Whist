@@ -59,7 +59,7 @@ export function toggleSettingsMenu() {
   menu.className = 'fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 pointer-events-auto';
 
   menu.innerHTML = `
-    <div class="glass p-6 md:p-8 max-w-md w-full mx-4 border border-slate-800 flex flex-col shadow-2xl relative rounded-2xl max-h-[90vh] overflow-hidden">
+    <div class="glass-opaque p-6 md:p-8 max-w-md w-full mx-4 border border-slate-800 flex flex-col shadow-2xl relative rounded-2xl max-h-[90vh] overflow-hidden">
       <!-- Header -->
       <div class="flex border-b border-slate-800 pb-3 mb-5">
         <button id="tab-visuals" class="flex-1 text-center py-2 text-xs font-black uppercase tracking-wider text-amber-400 border-b-2 border-amber-500">Visuals</button>
@@ -329,8 +329,9 @@ export function toggleSettingsMenu() {
 
       logInteraction(`Button Click: Attempting Save & Connect Server URL: "${val}"`);
       btnSave.disabled = true;
-      btnSave.textContent = 'Connecting...';
+      btnSave.classList.add('btn-loading');
       btnReset.disabled = true;
+      window.showLoading('Connecting to server...');
 
       // Persist the URL immediately
       localStorage.setItem('whist_server_url', val);
@@ -345,8 +346,10 @@ export function toggleSettingsMenu() {
       connectionTimeout = setTimeout(() => {
         if (unsubscribeSave) unsubscribeSave();
         btnSave.disabled = false;
+        btnSave.classList.remove('btn-loading');
         btnSave.textContent = 'Save & Connect';
         btnReset.disabled = false;
+        window.hideLoading();
         if (errorEl) {
           errorEl.textContent = 'Connection timeout. Check server status.';
           errorEl.classList.remove('hidden');
@@ -357,6 +360,7 @@ export function toggleSettingsMenu() {
         if (status === 'connected') {
           clearTimeout(connectionTimeout);
           if (unsubscribeSave) unsubscribeSave();
+          btnSave.classList.remove('btn-loading');
           btnSave.textContent = 'Connected! ✓';
           btnSave.className = 'btn btn-primary flex-1 py-2 text-xs font-bold';
           setTimeout(() => {
@@ -538,7 +542,7 @@ function showCustomConfirm(message, callback) {
   const modal = document.createElement('div');
   modal.className = 'fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-[100] pointer-events-auto';
   modal.innerHTML = `
-    <div class="glass p-6 max-w-sm w-full mx-4 border border-slate-800 flex flex-col items-center text-center shadow-2xl rounded-2xl animate-fade-in">
+    <div class="glass-opaque p-6 max-w-sm w-full mx-4 border border-slate-800 flex flex-col items-center text-center shadow-2xl rounded-2xl animate-fade-in">
       <h3 class="text-base font-extrabold text-white mb-2">Confirm Action</h3>
       <p class="text-xs text-slate-400 mb-6 leading-relaxed">${message}</p>
       <div class="flex gap-3 w-full">

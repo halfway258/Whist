@@ -83,30 +83,30 @@ function renderTutorialOverlay(stepIndex) {
   if (!overlay) {
     overlay = document.createElement('div');
     overlay.id = 'tutorial-guide-overlay';
-    overlay.className = 'fixed bottom-24 left-1/2 -translate-x-1/2 z-50 w-full max-w-xl px-4 pointer-events-none';
+    overlay.className = 'fixed bottom-2 right-2 md:bottom-4 md:right-4 z-50 w-[calc(100%-1rem)] max-w-[260px] md:max-w-[320px] pointer-events-none';
     document.body.appendChild(overlay);
   }
 
   overlay.innerHTML = `
-    <div class="glass p-5 border border-amber-500/30 bg-slate-900/90 shadow-2xl flex flex-col gap-4 pointer-events-auto rounded-2xl relative">
-      <div class="absolute top-3 right-3 text-[10px] uppercase font-black tracking-widest text-amber-400 bg-amber-950/40 px-2.5 py-0.5 rounded">
+    <div class="glass-opaque p-3.5 md:p-4 border border-amber-500/30 shadow-2xl flex flex-col gap-2 pointer-events-auto rounded-2xl relative">
+      <div class="absolute top-2.5 right-2.5 text-[8px] md:text-[10px] uppercase font-black tracking-widest text-amber-400 bg-amber-950/40 px-2 py-0.5 rounded">
         Step ${stepIndex + 1} of ${TUTORIAL_STEPS.length}
       </div>
       
-      <div class="flex flex-col gap-1.5 text-left">
-        <h4 class="text-sm font-black text-amber-400 uppercase tracking-wider">${step.title}</h4>
-        <p class="text-xs text-slate-300 font-medium leading-relaxed">${step.text}</p>
+      <div class="flex flex-col gap-1 text-left">
+        <h4 class="text-xs md:text-sm font-black text-amber-400 uppercase tracking-wider pr-16">${step.title}</h4>
+        <p class="text-[10px] md:text-xs text-slate-300 font-medium leading-relaxed mt-1">${step.text}</p>
       </div>
 
-      <div class="flex justify-between items-center mt-2 pt-3 border-t border-slate-800">
-        <button id="btn-tutorial-exit" class="btn btn-secondary text-xs !py-1.5 !px-3">
-          Exit Tutorial
+      <div class="flex justify-between items-center mt-1 md:mt-2 pt-2 md:pt-3 border-t border-slate-800">
+        <button id="btn-tutorial-exit" class="btn btn-secondary text-[10px] md:text-xs !py-1 md:!py-1.5 !px-2 md:!px-3">
+          Exit
         </button>
-        <div class="flex gap-2">
-          <button id="btn-tutorial-prev" class="btn btn-secondary text-xs !py-1.5 !px-3" ${stepIndex === 0 ? 'disabled opacity-40 cursor-not-allowed' : ''}>
+        <div class="flex gap-1.5">
+          <button id="btn-tutorial-prev" class="btn btn-secondary text-[10px] md:text-xs !py-1 md:!py-1.5 !px-2 md:!px-3" ${stepIndex === 0 ? 'disabled opacity-40 cursor-not-allowed' : ''}>
             ← Back
           </button>
-          <button id="btn-tutorial-next" class="btn btn-primary text-xs !py-1.5 !px-4">
+          <button id="btn-tutorial-next" class="btn btn-primary text-[10px] md:text-xs !py-1 md:!py-1.5 !px-2.5 md:!px-4">
             ${stepIndex === TUTORIAL_STEPS.length - 1 ? 'Finish' : 'Next →'}
           </button>
         </div>

@@ -21,7 +21,7 @@ export function renderPlaying(state, container) {
 
   // 1. Table Felt Area with 2x2 grid in the center
   const table = document.createElement('div');
-  table.className = 'table-felt w-full max-w-4xl flex-1 rounded-[40px] relative overflow-hidden flex items-center justify-center min-h-[220px] my-4';
+  table.className = 'table-felt w-full max-w-4xl flex-1 rounded-[40px] relative overflow-hidden flex items-center justify-center min-h-[220px] mt-16 md:mt-24 mb-4';
 
   const centerGrid = document.createElement('div');
   centerGrid.className = 'grid grid-cols-3 grid-rows-3 gap-3 items-center justify-items-center w-72 h-72 relative z-10';
@@ -67,14 +67,7 @@ export function renderPlaying(state, container) {
             const cardSvg = renderCard(playedCard, { small: true });
             cardSvg.style.boxShadow = '0 6px 12px rgba(0,0,0,0.3)';
             
-            // Rotate played card according to seat position
-            let rotation = 0;
-            if (seatIdx === 1) rotation = 90;
-            else if (seatIdx === 2) rotation = 180;
-            else if (seatIdx === 3) rotation = -90;
-            if (rotation !== 0) {
-              cardSvg.style.transform = `rotate(${rotation}deg)`;
-            }
+            // Keep all cards oriented upright (0 rotation) to avoid 6 vs 9 confusion
             
             cell.appendChild(cardSvg);
             
