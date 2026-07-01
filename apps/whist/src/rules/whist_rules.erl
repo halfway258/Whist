@@ -170,6 +170,7 @@ make_state_map(State, ViewerId) ->
     #{
         ~"current_stage" => StageStr,
         ~"is_spectator" => (ViewerId =:= ~"spectator"),
+        ~"max_bid" => State#rules_state.max_bid,
         ~"game_stats" => #{
             ~"round" => State#rules_state.round,
             ~"target_score" => maps:get(~"target_score", State#rules_state.settings, State#rules_state.target_score),

@@ -111,7 +111,10 @@ export function renderHUD(state, container) {
       const bubble = document.createElement('div');
       // Position bubble relative to player card depending on location
       let bubblePos = 'bottom-full mb-2 left-1/2 -translate-x-1/2';
-      if (!isMobile) {
+      if (i === 2) {
+        // Player 2 (Top player) bubble should be below the card to be visible within viewport bounds
+        bubblePos = 'top-full mt-2 left-1/2 -translate-x-1/2';
+      } else if (!isMobile) {
         if (i === 1) bubblePos = 'left-full ml-2 top-1/2 -translate-y-1/2';
         if (i === 3) bubblePos = 'right-full mr-2 top-1/2 -translate-y-1/2';
       }
@@ -198,30 +201,47 @@ export function renderHUD(state, container) {
     if (showHandSim && (!isMobile || state.is_spectator) && player.hand_size !== undefined) {
       const handSimContainer = document.createElement('div');
       
+      const isSpec = state.is_spectator === true;
+      
       // Position fanned cards at screen edges
       let positionClass = '';
       let baseRotation = 0;
-      if (i === 0) { // Bottom
-        positionClass = 'absolute bottom-4 left-32 md:left-40';
-        baseRotation = 0;
-      } else if (i === 1) { // Left
-        positionClass = 'absolute -left-4 top-[35%] -translate-y-1/2';
-        baseRotation = 90;
-      } else if (i === 2) { // Top
-        positionClass = 'absolute -top-4 left-1/2 -translate-x-1/2';
-        baseRotation = 180;
-      } else if (i === 3) { // Right
-        positionClass = 'absolute -right-4 top-[35%] -translate-y-1/2';
-        baseRotation = -90;
+      
+      if (isSpec) {
+        if (i === 0) { // Bottom
+          positionClass = 'absolute bottom-6 left-1/2 -translate-x-1/2';
+        } else if (i === 1) { // Left
+          positionClass = `absolute ${isMobile ? 'left-20' : 'left-28 md:left-36'} top-1/2 -translate-y-1/2`;
+        } else if (i === 2) { // Top
+          positionClass = `absolute ${isMobile ? 'top-16' : 'top-20 md:top-24'} left-1/2 -translate-x-1/2`;
+        } else if (i === 3) { // Right
+          positionClass = `absolute ${isMobile ? 'right-20' : 'right-28 md:right-36'} top-1/2 -translate-y-1/2`;
+        }
+      } else {
+        if (i === 0) { // Bottom
+          positionClass = 'absolute bottom-4 left-32 md:left-40';
+          baseRotation = 0;
+        } else if (i === 1) { // Left
+          positionClass = 'absolute -left-4 top-[35%] -translate-y-1/2';
+          baseRotation = 90;
+        } else if (i === 2) { // Top
+          positionClass = 'absolute -top-4 left-1/2 -translate-x-1/2';
+          baseRotation = 180;
+        } else if (i === 3) { // Right
+          positionClass = 'absolute -right-4 top-[35%] -translate-y-1/2';
+          baseRotation = -90;
+        }
       }
 
-      handSimContainer.className = `${positionClass} flex justify-center items-center h-10 w-48 z-10 pointer-events-none`;
+      const containerWidth = isSpec ? (i === 1 || i === 3 ? 'w-24' : 'w-[500px]') : 'w-48';
+      const containerHeight = isSpec ? (i === 1 || i === 3 ? 'h-[460px]' : 'h-24') : 'h-10';
+      handSimContainer.className = `${positionClass} flex justify-center items-center ${containerWidth} ${containerHeight} z-10 pointer-events-none`;
       
       const handSize = player.hand_size;
       const cardContainer = document.createElement('div');
-      cardContainer.className = 'relative h-10 w-full flex justify-center';
+      cardContainer.className = 'relative w-full h-full flex justify-center items-center';
       
-      if (baseRotation !== 0) {
+      if (!isSpec && baseRotation !== 0) {
         cardContainer.style.transform = `rotate(${baseRotation}deg)`;
       }
       
@@ -237,19 +257,34 @@ export function renderHUD(state, container) {
       for (let c = 0; c < handSize; c++) {
         let cardEl;
         if (sortedHand && sortedHand[c]) {
-          cardEl = renderCard(sortedHand[c], { mini: true });
+          cardEl = renderCard(sortedHand[c], { mini: !isSpec, small: isSpec });
         } else {
-          cardEl = renderCardBack({ mini: true });
+          cardEl = renderCardBack({ mini: !isSpec, small: isSpec });
         }
         cardEl.style.position = 'absolute';
         
         // Overlapping offset
         const centerIdx = (handSize - 1) / 2;
-        const offset = (c - centerIdx) * 6; 
-        let transform = `translateX(${offset}px)`;
+        let transform = '';
         
-        const rotation = (c - centerIdx) * 2;
-        transform += ` rotate(${rotation}deg)`;
+        if (isSpec) {
+          if (i === 1 || i === 3) {
+            // Vertical alignment for Left and Right hands
+            const offset = (c - centerIdx) * (isMobile ? 22 : 30);
+            transform = `translateY(${offset}px)`;
+          } else {
+            // Horizontal alignment for Bottom and Top hands
+            const offset = (c - centerIdx) * (isMobile ? 24 : 35);
+            transform = `translateX(${offset}px)`;
+            const rotation = (c - centerIdx) * 1.5;
+            transform += ` rotate(${rotation}deg)`;
+          }
+        } else {
+          const offset = (c - centerIdx) * 6; 
+          transform = `translateX(${offset}px)`;
+          const rotation = (c - centerIdx) * 2;
+          transform += ` rotate(${rotation}deg)`;
+        }
         
         cardEl.style.transform = transform;
         cardEl.style.transformOrigin = '50% 100%';

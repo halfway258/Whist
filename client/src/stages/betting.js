@@ -97,9 +97,59 @@ export function renderBetting(state, container) {
 
       board.appendChild(overlay);
     } else if (biddingStage === 'SUIT') {
+      const maxBid = state.max_bid;
+      let highBidHtml = '';
+      if (maxBid && maxBid.takes) {
+        const bidder = players.find(p => p.id === maxBid.player_id);
+        const bidderName = bidder ? (bidder.id === 'p1' && !isSpectator ? 'You' : bidder.name) : 'Someone';
+        
+        const getSuitSymbol = (suit) => {
+          switch(suit) {
+            case 'spades': return '♠';
+            case 'hearts': return '♥';
+            case 'diamonds': return '♦';
+            case 'clubs': return '♣';
+            case 'no_trump': return 'NT';
+            default: return '';
+          }
+        };
+
+        const capitalize = (str) => {
+          if (!str) return '';
+          return str.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        };
+
+        const suitColorClass = (suit) => {
+          if (suit === 'hearts' || suit === 'diamonds') return 'text-rose-500';
+          if (suit === 'clubs') return 'text-emerald-400';
+          if (suit === 'spades') return 'text-blue-400';
+          return 'text-amber-400'; // NT
+        };
+
+        const suitSymbol = getSuitSymbol(maxBid.suit);
+        const suitName = capitalize(maxBid.suit);
+        highBidHtml = `
+          <div class="w-full bg-slate-900/60 border border-slate-800 rounded-xl px-4 py-2 flex items-center justify-between text-[11px] mb-3.5 animate-pulse">
+            <span class="text-slate-400 font-bold uppercase tracking-wider">Current High Bid</span>
+            <span class="font-extrabold text-white">
+              ${bidderName}: <span class="${suitColorClass(maxBid.suit)} font-black font-mono text-xs">${maxBid.takes} ${suitName} ${suitSymbol}</span>
+            </span>
+          </div>
+        `;
+      } else {
+        highBidHtml = `
+          <div class="w-full bg-slate-900/40 border border-slate-800/30 rounded-xl px-4 py-2 flex items-center justify-between text-[11px] mb-3.5">
+            <span class="text-slate-400 font-bold uppercase tracking-wider">Current High Bid</span>
+            <span class="text-slate-500 font-extrabold uppercase tracking-wide">No bids yet</span>
+          </div>
+        `;
+      }
+
       overlay.innerHTML = `
         <h3 class="text-lg font-black text-white uppercase tracking-wider mb-1">Select Trump & Bid</h3>
         <p class="text-slate-400 text-[11px] font-medium mb-4">Choose a suit and bid at least ${promptData.min_bet} takes</p>
+        
+        ${highBidHtml}
         
         <div class="w-full flex flex-col gap-4">
           <!-- Suit buttons -->
