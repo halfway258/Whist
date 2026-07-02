@@ -32,22 +32,11 @@ export function renderHUD(state, container) {
   }
 
   statusContainer.innerHTML = `
-    <button id="btn-hud-refresh" class="btn btn-secondary text-[10px] md:text-xs !py-1 md:!py-1.5 !px-2 md:!px-3 flex items-center gap-1">
-      🔄 Refresh
-    </button>
     <button id="btn-settings" class="btn btn-secondary text-[10px] md:text-xs !py-1 md:!py-1.5 !px-2 md:!px-3 flex items-center gap-1">
       ⚙️ Menu
     </button>
   `;
   container.appendChild(statusContainer);
-
-  const btnHUDRefresh = statusContainer.querySelector('#btn-hud-refresh');
-  if (btnHUDRefresh) {
-    btnHUDRefresh.addEventListener('click', () => {
-      logInteraction('Button Click: HUD Refresh Page (F5)');
-      window.location.reload();
-    });
-  }
 
   const btnSettings = statusContainer.querySelector('#btn-settings');
   btnSettings.addEventListener('click', () => {

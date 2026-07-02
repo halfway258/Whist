@@ -132,14 +132,10 @@ To keep online matches moving, `main.js` manages turn inactivity timeouts:
 5.  A bot takes over the player's turns. An emerald banner displays on the user's screen: **"Bot Takeover Active"**.
 6.  The user can click **"Resume Control"** at any time to toggle bot mode off and resume playing.
 
-### Page Reload / Refresh Buttons
-To facilitate easy troubleshooting and state synchronization, **"Refresh Page (F5)"** buttons are integrated across all screens:
-*   **Main Menu (Server Select)**: Located at the bottom of the main menu card options.
-*   **Room Browser**: Positioned next to the room list query buttons.
-*   **Waiting Room Lobby**: Displayed inside the header next to the Settings toggle.
-*   **Gameplay (All stages)**: Displayed directly in the top-right corner of the HUD next to the Menu button.
+### Page Reload / Refresh Button
+To facilitate troubleshooting, a hard reload option is provided inside the settings menu:
 *   **Settings Menu**: Visible at the bottom of the actions container under both start-rules mode and normal mode.
-*   *Action*: Triggering any of these buttons performs a clean application reload (`window.location.reload()`), equivalent to pressing the F5 key.
+*   *Action*: Clicking this button performs a clean application reload (`window.location.reload()`), equivalent to pressing the F5 key.
 
 ### Round End Voting
 For games configured with "Choose after each round" (target_rounds = 0), a vote selection container is rendered:
