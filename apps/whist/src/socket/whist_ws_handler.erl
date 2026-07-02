@@ -53,6 +53,13 @@ websocket_handle(_Frame, State) ->
 websocket_info({send_state, StateJson}, State) ->
     log_server_interaction(io_lib:format("WS Sent: ~s", [StateJson])),
     {reply, {text, StateJson}, State};
+websocket_info({'DOWN', _Ref, process, GamePid, _Reason}, #ws_state{game_pid = GamePid} = State) when GamePid =/= nil ->
+    whist_utils:log("WS Handler: Game process ~p terminated. Clearing game state.", [GamePid]),
+    %% Notify client that the room was closed
+    self() ! {send_state, json:encode(#{~"type" => ~"room_closed"})},
+    {ok, State#ws_state{game_pid = nil, room_id = nil}};
+websocket_info({'DOWN', _Ref, process, _, _}, State) ->
+    {ok, State};
 websocket_info(_Info, State) ->
     {ok, State}.
 
@@ -126,6 +133,7 @@ handle_action(#{~"action" := ~"create_room", ~"name" := Name} = Msg, State) ->
             %% Automatically join the player to the room they created
             case whist_room_manager:join_room(RoomId, Password, Role, self()) of
                 {ok, GamePid} ->
+                    _ = monitor(process, GamePid),
                     {ok, State#ws_state{game_pid = GamePid, room_id = RoomId}};
                 {error, Reason} ->
                     send_error(~"failed_to_join_created_room", Reason),
@@ -151,6 +159,7 @@ handle_action(#{~"action" := ~"join_room", ~"room_id" := RoomId} = Msg, State) -
     end,
     case whist_room_manager:join_room(RoomId, Password, Role, self()) of
         {ok, GamePid} ->
+            _ = monitor(process, GamePid),
             {ok, State#ws_state{game_pid = GamePid, room_id = RoomId}};
         {error, Reason} ->
             send_error(~"join_room_failed", Reason),
