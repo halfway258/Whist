@@ -70,10 +70,24 @@ export function renderHUD(state, container) {
 
     const trumpText = gameStats.trump_suit && gameStats.trump_suit !== 'no_trump' ? ` | Trump: ${capitalize(gameStats.trump_suit)} ${getSuitSymbol(gameStats.trump_suit)}` : (gameStats.trump_suit === 'no_trump' ? ' | Trump: NT' : '');
 
+    const gameSettings = state.settings || {
+      end_condition: 'rounds',
+      target_score: 100,
+      target_rounds: 0
+    };
+
+    let targetText = '';
+    if (gameSettings.end_condition === 'rounds') {
+      targetText = gameSettings.target_rounds === 0 ? 'Target: Choose after each round' : `Target: ${gameSettings.target_rounds} Rounds`;
+    } else {
+      const targetScore = gameSettings.target_score || gameStats.target_score || 100;
+      targetText = `Target: ${targetScore} pts`;
+    }
+
     roundBadge.innerHTML = `
       <div class="text-[8px] md:text-[9px] text-slate-400 font-bold uppercase tracking-wider">${playStyleText}${trumpText}</div>
       <div class="text-sm md:text-xl font-black text-white font-mono leading-none mt-1">Round ${gameStats.round}${biddingStageText}</div>
-      <div class="text-[9px] md:text-[10px] text-amber-400 font-semibold mt-0.5 md:mt-1">Target: ${gameStats.target_score}</div>
+      <div class="text-[9px] md:text-[10px] text-amber-400 font-semibold mt-0.5 md:mt-1">${targetText}</div>
     `;
     container.appendChild(roundBadge);
   }

@@ -42,13 +42,6 @@ function boot() {
 
   document.documentElement.style.setProperty('--table-brightness', 1.0);
 
-  const theme = localStorage.getItem('whist_theme') || 'dark';
-  if (theme === 'light') {
-    document.body.classList.add('light-theme');
-  } else {
-    document.body.classList.remove('light-theme');
-  }
-
   // Initialize router (caches DOM refs)
   initRouter();
 
@@ -226,11 +219,7 @@ function boot() {
       const state = getState() || {};
       state.players = [];
       state.view_stage = 'ROOM_LIST';
-      state.room_id = undefined;
-      state.room_password = null;
-      state.room_role = 'player';
       updateState(state);
-      send({ action: 'list_rooms' });
     } else {
       // Compare player lists to trigger system notifications for bot replacements/reclaims
       const oldState = getState() || {};

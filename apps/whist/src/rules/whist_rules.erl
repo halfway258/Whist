@@ -13,6 +13,7 @@
     play_card/3,
     clear_trick/1,
     ready_next_round/2,
+    ready_next_round/3,
     return_menu/1,
     is_bot_turn/1,
     get_next_player_id/1,
@@ -44,9 +45,9 @@ init(Mode) ->
 
 default_settings() ->
     #{
-        ~"end_condition" => ~"score",
+        ~"end_condition" => ~"rounds",
         ~"target_score" => 100,
-        ~"target_rounds" => 8,
+        ~"target_rounds" => 0,
         ~"exchange_cards_count" => 2,
         ~"bot_difficulty" => ~"hard"
     }.
@@ -82,6 +83,10 @@ clear_trick(State) ->
 %% @doc Handles player ready states in the round end screen (Delegated to whist_stage_round_end).
 ready_next_round(PlayerId, State) ->
     whist_stage_round_end:ready_next_round(PlayerId, State).
+
+ready_next_round(PlayerId, Msg, State) ->
+    whist_stage_round_end:ready_next_round(PlayerId, Msg, State).
+
 
 %% @doc Resets the rules state back to lobby (Delegated to whist_stage_game_over).
 return_menu(State) ->

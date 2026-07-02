@@ -2,18 +2,22 @@
 
 -include("whist.hrl").
 
--export([ready_next_round/2, handle_round_end/1]).
+-export([ready_next_round/2, ready_next_round/3, handle_round_end/1]).
 
 %% @doc Handles player ready states in the round end screen.
 ready_next_round(PlayerId, State) ->
-    NewReady = [PlayerId | lists:delete(PlayerId, State#rules_state.ready_players)],
+    ready_next_round(PlayerId, #{}, State).
+
+ready_next_round(PlayerId, Msg, State) ->
+    Vote = maps:get(~"vote", Msg, ~"continue"),
     NewPlayers = [
         case maps:get(~"id", P) of
-            PlayerId -> P#{~"status" => ~"Ready"};
+            PlayerId -> P#{~"status" => ~"Ready", ~"vote" => Vote};
             _ -> P
         end
         || P <- State#rules_state.players
     ],
+    NewReady = [PlayerId | lists:delete(PlayerId, State#rules_state.ready_players)],
     NewState = State#rules_state{
         ready_players = NewReady,
         players = NewPlayers
@@ -25,14 +29,28 @@ ready_next_round(PlayerId, State) ->
     
     case IsAllReady of
         true ->
-            EndCondition = maps:get(~"end_condition", State#rules_state.settings, ~"score"),
-            GameOver = case EndCondition of
-                ~"rounds" ->
-                    TargetRounds = maps:get(~"target_rounds", State#rules_state.settings, 8),
-                    State#rules_state.round >= TargetRounds;
+            %% Check if any human player voted to end (only relevant if target_rounds = 0)
+            AnyEndVote = lists:any(
+                fun(P) ->
+                    IsHuman = maps:get(~"bot", P, false) =:= false,
+                    IsHuman andalso maps:get(~"vote", P, ~"continue") =:= ~"end"
+                end,
+                NewPlayers
+            ),
+
+            TargetRounds = maps:get(~"target_rounds", State#rules_state.settings, 0),
+            
+            GameOver = case TargetRounds of
+                0 -> AnyEndVote;
                 _ ->
-                    TargetScore = maps:get(~"target_score", State#rules_state.settings, State#rules_state.target_score),
-                    lists:any(fun(P) -> maps:get(~"score", P) >= TargetScore end, NewPlayers)
+                    EndCondition = maps:get(~"end_condition", State#rules_state.settings, ~"score"),
+                    case EndCondition of
+                        ~"rounds" ->
+                            State#rules_state.round >= TargetRounds;
+                        _ ->
+                            TargetScore = maps:get(~"target_score", State#rules_state.settings, State#rules_state.target_score),
+                            lists:any(fun(P) -> maps:get(~"score", P) >= TargetScore end, NewPlayers)
+                    end
             end,
             case GameOver of
                 true ->
@@ -40,7 +58,7 @@ ready_next_round(PlayerId, State) ->
                     {ok, NewState#rules_state{stage = game_over, winner = Winner}};
                 false ->
                     %% Transition to dealing next round
-                    ClearedPlayers = [P#{~"status" => ~""} || P <- NewPlayers],
+                    ClearedPlayers = [P#{~"status" => ~"", ~"vote" => null} || P <- NewPlayers],
                     {ok, NewState#rules_state{
                         stage = dealing,
                         round = State#rules_state.round + 1,

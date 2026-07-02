@@ -6,6 +6,7 @@ import { toggleSettingsMenu } from '../components/settings.js';
 
 let chatHistory = [];
 const DEFAULT_WS_URL = import.meta.env.VITE_WS_URL || 'wss://israeli-whist-backend.fly.dev';
+const autoOpenedRooms = new Set();
 
 /**
  * Render the LOBBY / Server Selection and Room Browser stage.
@@ -20,6 +21,7 @@ export function renderLobby(state, container) {
   // If players is empty, show Server Selection / Room Browser
   if (players.length === 0) {
     chatHistory = [];
+    autoOpenedRooms.clear();
     // If we have custom room list state or are viewing room browser
     if (state.view_stage === 'ROOM_LIST') {
       renderRoomBrowser(container, state);
@@ -28,7 +30,31 @@ export function renderLobby(state, container) {
     }
   } else {
     // Already in a room waiting
-    renderWaitingRoom(players, container, state);
+    const isOffline = state.mode === 'offline';
+    if (isOffline) {
+      // Offline setup: bypass bots waiting lobby UI
+      const card = document.createElement('div');
+      card.className = 'glass-opaque p-8 max-w-sm w-full mx-4 flex flex-col items-center text-center shadow-2xl relative rounded-2xl';
+      card.innerHTML = `
+        <h2 class="text-xl font-black text-white uppercase tracking-wider mb-2">Setting Up Game...</h2>
+        <p class="text-slate-400 text-xs font-semibold">Connecting and preparing offline session</p>
+      `;
+      container.appendChild(card);
+    } else {
+      renderWaitingRoom(players, container, state);
+    }
+
+    // Auto-open settings ONLY for offline mode host when first rendering the lobby
+    const localPlayer = players[0] || {};
+    const isHost = localPlayer.id === 'p1';
+    if (isHost && state.room_id && isOffline) {
+      if (!autoOpenedRooms.has(state.room_id)) {
+        autoOpenedRooms.add(state.room_id);
+        setTimeout(() => {
+          toggleSettingsMenu('rules');
+        }, 100);
+      }
+    }
   }
 }
 
@@ -547,19 +573,20 @@ function renderWaitingRoom(players, container, state) {
   const isReadyUser = localPlayer.status === 'Ready';
 
   const otherPlayers = players.slice(1);
-  const allOthersReady = otherPlayers.every(p => p.status === 'Ready');
+  const otherHumans = otherPlayers.filter(p => !p.bot);
+  const allOthersReady = otherHumans.every(p => p.status === 'Ready');
 
   // Read game settings for active rule display
   const gameSettings = state.settings || {
-    end_condition: 'score',
+    end_condition: 'rounds',
     target_score: 100,
-    target_rounds: 8,
+    target_rounds: 0,
     exchange_cards_count: 2,
     bot_difficulty: 'hard'
   };
 
   const endCondText = gameSettings.end_condition === 'rounds' 
-    ? `${gameSettings.target_rounds} Rounds` 
+    ? (gameSettings.target_rounds === 0 ? 'Choose after each round' : `${gameSettings.target_rounds} Rounds`)
     : `${gameSettings.target_score} Points`;
   const exchangeText = gameSettings.exchange_cards_count === 0 
     ? 'No Exchange' 
@@ -771,17 +798,15 @@ function renderWaitingRoom(players, container, state) {
   if (btnStart) {
     btnStart.addEventListener('click', () => {
       const currentOthers = (getState().players || []).slice(1);
-      const currentReady = currentOthers.every(p => p.status === 'Ready');
+      const currentOthersHumans = currentOthers.filter(p => !p.bot);
+      const currentReady = currentOthersHumans.every(p => p.status === 'Ready');
       if (!currentReady) {
         alert('Cannot start game: All other connected players must ready up first.');
         return;
       }
 
-      logInteraction('Button Click: Start Game Early (with bots)');
-      btnStart.disabled = true;
-      btnStart.classList.add('btn-loading');
-      btnStart.textContent = 'Starting...';
-      send({ action: 'start_game' });
+      logInteraction('Button Click: Host clicked Start Game - Open Rules Confirm Popup');
+      toggleSettingsMenu('rules', true);
     });
   }
 

@@ -34,7 +34,7 @@ join(PlayerId, Name, IsBot, State) ->
                     ],
                     {ok, NewState#rules_state{
                         players = NewPlayers ++ Bots,
-                        stage = dealing,
+                        stage = lobby,
                         round = 1
                     }};
                 {online, 4} ->

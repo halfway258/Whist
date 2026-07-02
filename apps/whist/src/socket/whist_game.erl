@@ -340,8 +340,10 @@ handle_cast({action, ~"start_game", ConnPid, _Msg}, State) ->
             case RulesState#rules_state.stage of
                 lobby ->
                     CurrentPlayers = RulesState#rules_state.players,
-                    OtherPlayers = [P || P <- CurrentPlayers, maps:get(~"id", P) =/= ~"p1"],
-                    AllOthersReady = lists:all(fun(P) -> maps:get(~"status", P) =:= ~"Ready" end, OtherPlayers),
+                    OtherHumans = [P || P <- CurrentPlayers, 
+                                        maps:get(~"id", P) =/= ~"p1", 
+                                        maps:get(~"bot", P, false) =:= false],
+                    AllOthersReady = lists:all(fun(P) -> maps:get(~"status", P) =:= ~"Ready" end, OtherHumans),
                     case AllOthersReady of
                         true ->
                             NumPlayers = length(CurrentPlayers),
@@ -605,11 +607,11 @@ handle_player_action(~"play_card", PlayerId, Msg, State) ->
             {noreply, State}
     end;
 
-handle_player_action(~"ready_next_round", PlayerId, _Msg, State) ->
+handle_player_action(~"ready_next_round", PlayerId, Msg, State) ->
     RulesState = State#game_session_state.rules_state,
     case whist_rules:stage(RulesState) =:= round_end of
         true ->
-            {ok, NewRulesState} = whist_rules:ready_next_round(PlayerId, RulesState),
+            {ok, NewRulesState} = whist_rules:ready_next_round(PlayerId, Msg, RulesState),
             NewState = State#game_session_state{rules_state = NewRulesState},
             broadcast_state(NewState),
             

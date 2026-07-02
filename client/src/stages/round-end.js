@@ -12,6 +12,9 @@ export function renderRoundEnd(state, container) {
   const players = state.players || [];
   const gameStats = state.game_stats || { round: 1 };
 
+  const gameSettings = state.settings || { target_rounds: 0 };
+  const isZeroRounds = gameSettings.target_rounds === 0;
+
   // Background overlay (semi-translucent with blur)
   const overlay = document.createElement('div');
   overlay.className = 'w-full h-full flex flex-col justify-center items-center p-4 bg-slate-950/90 backdrop-blur-md z-30 relative';
@@ -73,9 +76,24 @@ export function renderRoundEnd(state, container) {
 
         // Ready status indicator for next round
         const isReady = p.status === 'Ready';
-        const readyIndicator = isReady 
-          ? `<span class="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase tracking-wider ml-2">✓ Ready</span>`
-          : `<span class="bg-slate-800 text-slate-500 border border-slate-700/30 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ml-2">Waiting</span>`;
+        let readyIndicator = '';
+        if (isZeroRounds) {
+          if (p.status === 'Ready') {
+            const voteStr = p.vote === 'end' ? 'End Game' : 'Continue';
+            const voteClass = p.vote === 'end' ? 'bg-rose-500/20 text-rose-400 border-rose-500/30' : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
+            readyIndicator = `<span class="${voteClass} border px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase tracking-wider ml-2">✓ ${voteStr}</span>`;
+          } else {
+            if (p.bot) {
+              readyIndicator = `<span class="bg-slate-800 text-slate-500 border border-slate-700/30 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ml-2">Ready</span>`;
+            } else {
+              readyIndicator = `<span class="bg-slate-800 text-slate-500 border border-slate-700/30 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ml-2">Voting...</span>`;
+            }
+          }
+        } else {
+          readyIndicator = isReady 
+            ? `<span class="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase tracking-wider ml-2">✓ Ready</span>`
+            : `<span class="bg-slate-800 text-slate-500 border border-slate-700/30 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ml-2">Waiting</span>`;
+        }
 
         return `
           <tr class="${rowClass}">
@@ -103,6 +121,40 @@ export function renderRoundEnd(state, container) {
     specBanner.className = 'glass-sm px-6 py-3 text-xs font-extrabold text-slate-400 uppercase tracking-widest relative z-10';
     specBanner.textContent = 'Spectating — Waiting for next round...';
     overlay.appendChild(specBanner);
+  } else if (isZeroRounds) {
+    const localPlayerStatus = players[0]?.status;
+    if (localPlayerStatus === 'Ready') {
+      const waitBanner = document.createElement('div');
+      waitBanner.className = 'glass-sm px-6 py-3 text-xs font-extrabold text-slate-400 uppercase tracking-widest relative z-10';
+      waitBanner.textContent = 'Waiting for other players to vote...';
+      overlay.appendChild(waitBanner);
+    } else {
+      const btnContainer = document.createElement('div');
+      btnContainer.className = 'flex gap-4 relative z-10';
+
+      const continueBtn = document.createElement('button');
+      continueBtn.className = 'btn btn-primary text-sm px-6 py-2.5 flex items-center gap-1.5';
+      continueBtn.innerHTML = '<span>Vote Continue</span> <span>→</span>';
+
+      const endBtn = document.createElement('button');
+      endBtn.className = 'btn btn-danger text-sm px-6 py-2.5 flex items-center gap-1.5';
+      endBtn.innerHTML = '<span>Vote End Game</span> <span>🛑</span>';
+
+      const voteFn = (voteVal, clickedBtn, otherBtn) => {
+        logInteraction(`Button Click: Vote ${voteVal === 'end' ? 'End Game' : 'Continue'}`);
+        clickedBtn.disabled = true;
+        otherBtn.disabled = true;
+        clickedBtn.textContent = 'Voting...';
+        send({ action: 'ready_next_round', vote: voteVal });
+      };
+
+      continueBtn.addEventListener('click', () => voteFn('continue', continueBtn, endBtn));
+      endBtn.addEventListener('click', () => voteFn('end', endBtn, continueBtn));
+
+      btnContainer.appendChild(continueBtn);
+      btnContainer.appendChild(endBtn);
+      overlay.appendChild(btnContainer);
+    }
   } else {
     // 3. Ready Action Button
     const readyBtn = document.createElement('button');

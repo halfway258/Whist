@@ -2,7 +2,7 @@ import { send, connect, disconnect, getConnectionStatus, onStatusChange } from '
 import { getState, updateState } from '../state.js';
 import { logInteraction } from '../logger.js';
 
-export function toggleSettingsMenu() {
+export function toggleSettingsMenu(defaultTab = 'visuals', isStartConfirm = false) {
   let menu = document.getElementById('settings-menu-overlay');
   if (menu) {
     logInteraction('Settings menu toggled close');
@@ -17,7 +17,6 @@ export function toggleSettingsMenu() {
   const textSize = parseInt(localStorage.getItem('whist_text_size') || '18', 10);
   const cardSpacing = parseInt(localStorage.getItem('whist_card_spacing') || '32', 10);
   const feltBrightness = parseInt(localStorage.getItem('whist_felt_brightness') || '100', 10);
-  const theme = localStorage.getItem('whist_theme') || 'dark';
   const showRoundStats = localStorage.getItem('whist_show_round_stats') !== 'false';
   const showOppCards = localStorage.getItem('whist_show_opp_cards') !== 'false';
   const showChat = localStorage.getItem('whist_show_chat') !== 'false';
@@ -29,11 +28,15 @@ export function toggleSettingsMenu() {
   const isHost = localPlayer ? localPlayer.id === 'p1' : true; 
   const canEditRules = currentStage === 'LOBBY' && isHost;
 
+  const isOfflineSetup = state.mode === 'offline' && currentStage === 'LOBBY';
+  const isOnlineStartConfirm = state.mode === 'online' && currentStage === 'LOBBY' && isStartConfirm;
+  const isStartMode = isOfflineSetup || isOnlineStartConfirm;
+
   // Retrieve current game rules settings from state
   const gameSettings = state.settings || {
-    end_condition: 'score',
+    end_condition: 'rounds',
     target_score: 100,
-    target_rounds: 8,
+    target_rounds: 0,
     exchange_cards_count: 2,
     bot_difficulty: 'hard'
   };
@@ -54,32 +57,40 @@ export function toggleSettingsMenu() {
     statusText = 'Connecting';
   }
 
+  const activeClass = 'flex-1 text-center py-2 text-xs font-black uppercase tracking-wider text-amber-400 border-b-2 border-amber-500';
+  const inactiveClass = 'flex-1 text-center py-2 text-xs font-black uppercase tracking-wider text-slate-400 border-b-2 border-transparent';
+
   menu = document.createElement('div');
   menu.id = 'settings-menu-overlay';
   menu.className = 'fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-50 pointer-events-auto';
 
+  let headerHtml = '';
+  if (isStartMode) {
+    const title = isOfflineSetup ? 'Offline Game Setup' : 'Confirm Game Rules';
+    headerHtml = `
+      <div class="border-b border-slate-800 pb-3 mb-5 text-center">
+        <h2 class="text-xl font-black text-white uppercase tracking-wider">${title}</h2>
+      </div>
+    `;
+  } else {
+    headerHtml = `
+      <div class="flex border-b border-slate-800 pb-3 mb-5">
+        <button id="tab-visuals" class="${defaultTab === 'visuals' ? activeClass : inactiveClass}">Visuals</button>
+        <button id="tab-server" class="${defaultTab === 'server' ? activeClass : inactiveClass}">Server</button>
+        <button id="tab-rules" class="${defaultTab === 'rules' ? activeClass : inactiveClass}">Game Rules</button>
+      </div>
+    `;
+  }
+
   menu.innerHTML = `
     <div class="glass-opaque p-6 md:p-8 max-w-md w-full mx-4 border border-slate-800 flex flex-col shadow-2xl relative rounded-2xl max-h-[90vh] overflow-hidden">
       <!-- Header -->
-      <div class="flex border-b border-slate-800 pb-3 mb-5">
-        <button id="tab-visuals" class="flex-1 text-center py-2 text-xs font-black uppercase tracking-wider text-amber-400 border-b-2 border-amber-500">Visuals</button>
-        <button id="tab-server" class="flex-1 text-center py-2 text-xs font-black uppercase tracking-wider text-slate-400 border-b-2 border-transparent">Server</button>
-        <button id="tab-rules" class="flex-1 text-center py-2 text-xs font-black uppercase tracking-wider text-slate-400 border-b-2 border-transparent">Game Rules</button>
-      </div>
+      ${headerHtml}
 
       <!-- Tab Content Container -->
       <div id="settings-tab-content" class="flex-1 overflow-y-auto pr-1 mb-6">
         <!-- Visual Settings -->
-        <div id="panel-visuals" class="flex flex-col gap-5">
-          <!-- Theme selector -->
-          <div class="flex justify-between items-center text-xs font-bold uppercase tracking-wide text-slate-300">
-            <span>Theme Mode</span>
-            <select id="theme-selector" class="input py-1 text-xs font-semibold">
-              <option value="dark" ${theme === 'dark' ? 'selected' : ''}>Dark Mode</option>
-              <option value="light" ${theme === 'light' ? 'selected' : ''}>Light Mode</option>
-            </select>
-          </div>
-
+        <div id="panel-visuals" class="flex flex-col gap-5 ${(!isStartMode && defaultTab === 'visuals') ? '' : 'hidden'}">
           <!-- Text Size Slider -->
           <div class="flex flex-col gap-1.5">
             <div class="flex justify-between items-center text-xs font-bold uppercase tracking-wide text-slate-300">
@@ -95,7 +106,7 @@ export function toggleSettingsMenu() {
               <span>Card Fan Spacing</span>
               <span id="card-spacing-val" class="font-mono text-amber-400 text-sm">${cardSpacing}px</span>
             </div>
-            <input type="range" id="card-spacing-slider" min="15" max="60" value="${cardSpacing}" class="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500" />
+            <input type="range" id="card-spacing-slider" min="10" max="100" value="${cardSpacing}" class="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500" />
           </div>
 
           <!-- HUD Toggles -->
@@ -112,7 +123,7 @@ export function toggleSettingsMenu() {
         </div>
 
         <!-- Server Settings -->
-        <div id="panel-server" class="flex flex-col gap-5 hidden">
+        <div id="panel-server" class="flex flex-col gap-5 ${(!isStartMode && defaultTab === 'server') ? '' : 'hidden'}">
           <!-- Connection Status -->
           <div class="flex justify-between items-center text-xs font-bold uppercase tracking-wide text-slate-300">
             <span>Connection Status</span>
@@ -148,7 +159,7 @@ export function toggleSettingsMenu() {
         </div>
 
         <!-- Game Rules Settings -->
-        <div id="panel-rules" class="flex flex-col gap-5 hidden">
+        <div id="panel-rules" class="flex flex-col gap-5 ${(isStartMode || defaultTab === 'rules') ? '' : 'hidden'}">
           ${!canEditRules ? `
             <div class="glass-sm p-3 border border-amber-500/20 text-amber-400 text-[11px] font-semibold text-center leading-relaxed mb-2">
               ⚠️ Game rules can only be modified in the waiting Lobby by the room Host.
@@ -179,9 +190,9 @@ export function toggleSettingsMenu() {
           <div id="rule-rounds-container" class="flex flex-col gap-1.5 ${gameSettings.end_condition !== 'rounds' ? 'hidden' : ''}">
             <div class="flex justify-between items-center text-xs font-bold uppercase tracking-wide text-slate-300">
               <span>Max Round Limit</span>
-              <span id="rules-rounds-val" class="font-mono text-amber-400 text-sm">${gameSettings.target_rounds} rounds</span>
+              <span id="rules-rounds-val" class="font-mono text-amber-400 text-sm">${gameSettings.target_rounds === 0 ? '0 (Choose after each round)' : gameSettings.target_rounds + ' rounds'}</span>
             </div>
-            <input type="range" id="rules-rounds-slider" min="1" max="20" value="${gameSettings.target_rounds}" class="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500" ${!canEditRules ? 'disabled' : ''} />
+            <input type="range" id="rules-rounds-slider" min="0" max="20" value="${gameSettings.target_rounds}" class="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500" ${!canEditRules ? 'disabled' : ''} />
           </div>
 
           <!-- Cards in Exchange -->
@@ -205,7 +216,7 @@ export function toggleSettingsMenu() {
           </div>
 
           <!-- Apply Rules Button -->
-          ${canEditRules ? `
+          ${(canEditRules && !isStartMode) ? `
             <button id="btn-apply-rules" class="btn btn-gold w-full py-2 text-xs font-bold mt-2">
               Apply Rules Settings
             </button>
@@ -215,48 +226,59 @@ export function toggleSettingsMenu() {
 
       <!-- Action Buttons -->
       <div class="flex flex-col gap-3 w-full border-t border-slate-800 pt-4">
-        <button id="btn-settings-close" class="btn btn-primary w-full py-2.5 text-xs font-bold">
-          Close Settings
-        </button>
-        ${players.length > 0 ? `
-          <button id="btn-settings-exit" class="btn btn-danger w-full py-2.5 text-xs font-bold">
-            Exit Game
+        ${isStartMode ? `
+          <button id="btn-settings-start-game" class="btn btn-primary w-full py-2.5 text-xs font-bold">
+            Start Game ⚔️
           </button>
-        ` : ''}
+          <button id="btn-settings-cancel" class="btn ${isOfflineSetup ? 'btn-danger' : 'btn-secondary'} w-full py-2.5 text-xs font-bold">
+            Cancel
+          </button>
+        ` : `
+          <button id="btn-settings-close" class="btn btn-primary w-full py-2.5 text-xs font-bold">
+            Close Settings
+          </button>
+          ${players.length > 0 ? `
+            <button id="btn-settings-exit" class="btn btn-danger w-full py-2.5 text-xs font-bold">
+              Exit Game
+            </button>
+          ` : ''}
+        `}
       </div>
     </div>
   `;
 
   document.body.appendChild(menu);
 
-  // Hook up tabs
-  const tabVisuals = menu.querySelector('#tab-visuals');
-  const tabServer = menu.querySelector('#tab-server');
-  const tabRules = menu.querySelector('#tab-rules');
-  const panelVisuals = menu.querySelector('#panel-visuals');
-  const panelServer = menu.querySelector('#panel-server');
-  const panelRules = menu.querySelector('#panel-rules');
+  // Hook up tabs if not in start mode
+  if (!isStartMode) {
+    const tabVisuals = menu.querySelector('#tab-visuals');
+    const tabServer = menu.querySelector('#tab-server');
+    const tabRules = menu.querySelector('#tab-rules');
+    const panelVisuals = menu.querySelector('#panel-visuals');
+    const panelServer = menu.querySelector('#panel-server');
+    const panelRules = menu.querySelector('#panel-rules');
 
-  const setTab = (activeTab) => {
-    const tabs = [
-      { btn: tabVisuals, panel: panelVisuals },
-      { btn: tabServer, panel: panelServer },
-      { btn: tabRules, panel: panelRules }
-    ];
-    tabs.forEach(t => {
-      if (t.btn === activeTab) {
-        t.btn.className = 'flex-1 text-center py-2 text-xs font-black uppercase tracking-wider text-amber-400 border-b-2 border-amber-500';
-        t.panel.classList.remove('hidden');
-      } else {
-        t.btn.className = 'flex-1 text-center py-2 text-xs font-black uppercase tracking-wider text-slate-400 border-b-2 border-transparent';
-        t.panel.classList.add('hidden');
-      }
-    });
-  };
+    const setTab = (activeTab) => {
+      const tabs = [
+        { btn: tabVisuals, panel: panelVisuals },
+        { btn: tabServer, panel: panelServer },
+        { btn: tabRules, panel: panelRules }
+      ];
+      tabs.forEach(t => {
+        if (t.btn === activeTab) {
+          t.btn.className = 'flex-1 text-center py-2 text-xs font-black uppercase tracking-wider text-amber-400 border-b-2 border-amber-500';
+          t.panel.classList.remove('hidden');
+        } else {
+          t.btn.className = 'flex-1 text-center py-2 text-xs font-black uppercase tracking-wider text-slate-400 border-b-2 border-transparent';
+          t.panel.classList.add('hidden');
+        }
+      });
+    };
 
-  tabVisuals.addEventListener('click', () => setTab(tabVisuals));
-  tabServer.addEventListener('click', () => setTab(tabServer));
-  tabRules.addEventListener('click', () => setTab(tabRules));
+    tabVisuals.addEventListener('click', () => setTab(tabVisuals));
+    tabServer.addEventListener('click', () => setTab(tabServer));
+    tabRules.addEventListener('click', () => setTab(tabRules));
+  }
 
   // Connection status live updates
   const statusBadge = menu.querySelector('#server-status-badge');
@@ -359,7 +381,6 @@ export function toggleSettingsMenu() {
   }
 
   // Visual inputs
-  const themeSelector = menu.querySelector('#theme-selector');
   const textSizeSlider = menu.querySelector('#text-size-slider');
   const textSizeVal = menu.querySelector('#text-size-val');
   const cardSpacingSlider = menu.querySelector('#card-spacing-slider');
@@ -367,21 +388,6 @@ export function toggleSettingsMenu() {
   
   const toggleRoundStats = menu.querySelector('#toggle-round-stats');
   const toggleChat = menu.querySelector('#toggle-chat');
-
-  const btnClose = menu.querySelector('#btn-settings-close');
-  const btnExit = menu.querySelector('#btn-settings-exit');
-
-  // Theme change
-  themeSelector.addEventListener('change', () => {
-    const val = themeSelector.value;
-    localStorage.setItem('whist_theme', val);
-    if (val === 'light') {
-      document.body.classList.add('light-theme');
-    } else {
-      document.body.classList.remove('light-theme');
-    }
-    logInteraction(`Setting Changed: Theme set to ${val}`);
-  });
 
   // Text size change
   textSizeSlider.addEventListener('input', () => {
@@ -415,18 +421,18 @@ export function toggleSettingsMenu() {
   });
 
   // Game rules inputs
-  if (canEditRules) {
-    const endConditionSelector = menu.querySelector('#rules-end-condition');
-    const scoreContainer = menu.querySelector('#rule-score-container');
-    const scoreSlider = menu.querySelector('#rules-score-slider');
-    const scoreVal = menu.querySelector('#rules-score-val');
-    const roundsContainer = menu.querySelector('#rule-rounds-container');
-    const roundsSlider = menu.querySelector('#rules-rounds-slider');
-    const roundsVal = menu.querySelector('#rules-rounds-val');
-    const exchangeSelector = menu.querySelector('#rules-exchange-cards');
-    const difficultySelector = menu.querySelector('#rules-bot-difficulty');
-    const btnApply = menu.querySelector('#btn-apply-rules');
+  const endConditionSelector = menu.querySelector('#rules-end-condition');
+  const scoreContainer = menu.querySelector('#rule-score-container');
+  const scoreSlider = menu.querySelector('#rules-score-slider');
+  const scoreVal = menu.querySelector('#rules-score-val');
+  const roundsContainer = menu.querySelector('#rule-rounds-container');
+  const roundsSlider = menu.querySelector('#rules-rounds-slider');
+  const roundsVal = menu.querySelector('#rules-rounds-val');
+  const exchangeSelector = menu.querySelector('#rules-exchange-cards');
+  const difficultySelector = menu.querySelector('#rules-bot-difficulty');
+  const btnApply = menu.querySelector('#btn-apply-rules');
 
+  if (canEditRules) {
     endConditionSelector.addEventListener('change', () => {
       const val = endConditionSelector.value;
       if (val === 'score') {
@@ -443,10 +449,45 @@ export function toggleSettingsMenu() {
     });
 
     roundsSlider.addEventListener('input', () => {
-      roundsVal.textContent = `${roundsSlider.value} rounds`;
+      roundsVal.textContent = roundsSlider.value === '0' ? '0 (Choose after each round)' : `${roundsSlider.value} rounds`;
     });
 
-    btnApply.addEventListener('click', () => {
+    if (btnApply) {
+      btnApply.addEventListener('click', () => {
+        const payload = {
+          action: 'update_settings',
+          settings: {
+            end_condition: endConditionSelector.value,
+            target_score: parseInt(scoreSlider.value, 10),
+            target_rounds: parseInt(roundsSlider.value, 10),
+            exchange_cards_count: parseInt(exchangeSelector.value, 10),
+            bot_difficulty: difficultySelector.value
+          }
+        };
+        send(payload);
+        logInteraction(`Applied Game Rules Settings: ${JSON.stringify(payload.settings)}`);
+        
+        btnApply.textContent = 'Settings Applied! ✓';
+        btnApply.className = 'btn btn-primary w-full py-2 text-xs font-bold mt-2';
+        setTimeout(() => {
+          btnApply.textContent = 'Apply Rules Settings';
+          btnApply.className = 'btn btn-gold w-full py-2 text-xs font-bold mt-2';
+        }, 1500);
+      });
+    }
+  }
+
+  // Wire buttons based on mode
+  if (isStartMode) {
+    const btnStartGame = menu.querySelector('#btn-settings-start-game');
+    const btnCancel = menu.querySelector('#btn-settings-cancel');
+
+    btnStartGame.addEventListener('click', () => {
+      logInteraction('Button Click: Confirm and Start Game');
+      btnStartGame.disabled = true;
+      btnStartGame.classList.add('btn-loading');
+
+      // 1. Send update rules payload
       const payload = {
         action: 'update_settings',
         settings: {
@@ -458,38 +499,19 @@ export function toggleSettingsMenu() {
         }
       };
       send(payload);
-      logInteraction(`Applied Game Rules Settings: ${JSON.stringify(payload.settings)}`);
-      
-      btnApply.textContent = 'Settings Applied! ✓';
-      btnApply.className = 'btn btn-primary w-full py-2 text-xs font-bold mt-2';
-      setTimeout(() => {
-        btnApply.textContent = 'Apply Rules Settings';
-        btnApply.className = 'btn btn-gold w-full py-2 text-xs font-bold mt-2';
-      }, 1500);
+
+      // 2. Send start_game action
+      send({ action: 'start_game' });
+      closeMenu();
     });
-  }
 
-  // Close button
-  btnClose.addEventListener('click', () => {
-    logInteraction('Button Click: Close Settings');
-    closeMenu();
-  });
-
-  // Exit button
-  if (btnExit) {
-    btnExit.addEventListener('click', () => {
-      logInteraction('Button Click: Exit Game');
-      const isOffline = state.mode === 'offline';
-      const warningMsg = isOffline 
-        ? 'Game will not be saved. Still exit?' 
-        : 'Are you sure you want to exit the match? You will be replaced by a bot.';
-
-      showCustomConfirm(warningMsg, () => {
-        logInteraction('Button Click: Confirm Exit Game');
-        closeMenu();
+    btnCancel.addEventListener('click', () => {
+      logInteraction('Button Click: Cancel Game Start');
+      closeMenu();
+      if (isOfflineSetup) {
+        // Exit to main menu for offline setup cancel
         send({ action: 'leave_room' });
         disconnect();
-        
         const cleanLobbyState = {
           current_stage: 'LOBBY',
           players: [],
@@ -502,8 +524,46 @@ export function toggleSettingsMenu() {
           mode: null
         };
         updateState(cleanLobbyState);
-      });
+      }
     });
+  } else {
+    const btnClose = menu.querySelector('#btn-settings-close');
+    const btnExit = menu.querySelector('#btn-settings-exit');
+
+    btnClose.addEventListener('click', () => {
+      logInteraction('Button Click: Close Settings');
+      closeMenu();
+    });
+
+    if (btnExit) {
+      btnExit.addEventListener('click', () => {
+        logInteraction('Button Click: Exit Game');
+        const isOffline = state.mode === 'offline';
+        const warningMsg = isOffline 
+          ? 'Game will not be saved. Still exit?' 
+          : 'Are you sure you want to exit the match? You will be replaced by a bot.';
+
+        showCustomConfirm(warningMsg, () => {
+          logInteraction('Button Click: Confirm Exit Game');
+          closeMenu();
+          send({ action: 'leave_room' });
+          disconnect();
+          
+          const cleanLobbyState = {
+            current_stage: 'LOBBY',
+            players: [],
+            my_hand: [],
+            table_cards: [],
+            prompt_data: null,
+            trick_winner: null,
+            winner: null,
+            view_stage: 'SERVER_SELECT',
+            mode: null
+          };
+          updateState(cleanLobbyState);
+        });
+      });
+    }
   }
 }
 
