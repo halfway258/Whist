@@ -122,39 +122,56 @@ export function renderRoundEnd(state, container) {
     specBanner.textContent = 'Spectating — Waiting for next round...';
     overlay.appendChild(specBanner);
   } else if (isZeroRounds) {
-    const localPlayerStatus = players[0]?.status;
-    if (localPlayerStatus === 'Ready') {
-      const waitBanner = document.createElement('div');
-      waitBanner.className = 'glass-sm px-6 py-3 text-xs font-extrabold text-slate-400 uppercase tracking-widest relative z-10';
-      waitBanner.textContent = 'Waiting for other players to vote...';
-      overlay.appendChild(waitBanner);
+    const localPlayer = players[0] || {};
+    const myVote = localPlayer.vote; // 'continue', 'end', or null/undefined
+    
+    const btnContainer = document.createElement('div');
+    btnContainer.className = 'flex flex-col items-center gap-4 relative z-10 w-full max-w-sm';
+
+    // Helper text
+    const helperText = document.createElement('p');
+    helperText.className = 'text-xs font-bold text-slate-400 uppercase tracking-wider text-center';
+    if (myVote) {
+      const voteStr = myVote === 'end' ? 'End Game 🛑' : 'Continue ➔';
+      helperText.innerHTML = `You voted: <span class="text-amber-400 font-extrabold">${voteStr}</span>. Waiting for others...`;
     } else {
-      const btnContainer = document.createElement('div');
-      btnContainer.className = 'flex gap-4 relative z-10';
-
-      const continueBtn = document.createElement('button');
-      continueBtn.className = 'btn btn-primary text-sm px-6 py-2.5 flex items-center gap-1.5';
-      continueBtn.innerHTML = '<span>Vote Continue</span> <span>→</span>';
-
-      const endBtn = document.createElement('button');
-      endBtn.className = 'btn btn-danger text-sm px-6 py-2.5 flex items-center gap-1.5';
-      endBtn.innerHTML = '<span>Vote End Game</span> <span>🛑</span>';
-
-      const voteFn = (voteVal, clickedBtn, otherBtn) => {
-        logInteraction(`Button Click: Vote ${voteVal === 'end' ? 'End Game' : 'Continue'}`);
-        clickedBtn.disabled = true;
-        otherBtn.disabled = true;
-        clickedBtn.textContent = 'Voting...';
-        send({ action: 'ready_next_round', vote: voteVal });
-      };
-
-      continueBtn.addEventListener('click', () => voteFn('continue', continueBtn, endBtn));
-      endBtn.addEventListener('click', () => voteFn('end', endBtn, continueBtn));
-
-      btnContainer.appendChild(continueBtn);
-      btnContainer.appendChild(endBtn);
-      overlay.appendChild(btnContainer);
+      helperText.textContent = 'Cast your vote to continue or end the match:';
     }
+    btnContainer.appendChild(helperText);
+
+    const buttonRow = document.createElement('div');
+    buttonRow.className = 'flex gap-4 w-full';
+
+    const continueBtn = document.createElement('button');
+    continueBtn.className = myVote === 'continue'
+      ? 'btn btn-primary text-sm px-6 py-2.5 flex-1 flex items-center justify-center gap-1.5 border border-emerald-400/20'
+      : 'btn btn-secondary text-sm px-6 py-2.5 flex-1 flex items-center justify-center gap-1.5 opacity-60 hover:opacity-100';
+    continueBtn.innerHTML = '<span>Vote Continue</span> <span>→</span>';
+
+    const endBtn = document.createElement('button');
+    endBtn.className = myVote === 'end'
+      ? 'btn btn-danger text-sm px-6 py-2.5 flex-1 flex items-center justify-center gap-1.5 border border-rose-400/20'
+      : 'btn btn-secondary text-sm px-6 py-2.5 flex-1 flex items-center justify-center gap-1.5 opacity-60 hover:opacity-100';
+    endBtn.innerHTML = '<span>Vote End</span> <span>🛑</span>';
+
+    continueBtn.addEventListener('click', () => {
+      if (myVote !== 'continue') {
+        logInteraction('Button Click: Change vote to Continue');
+        send({ action: 'ready_next_round', vote: 'continue' });
+      }
+    });
+
+    endBtn.addEventListener('click', () => {
+      if (myVote !== 'end') {
+        logInteraction('Button Click: Change vote to End Game');
+        send({ action: 'ready_next_round', vote: 'end' });
+      }
+    });
+
+    buttonRow.appendChild(continueBtn);
+    buttonRow.appendChild(endBtn);
+    btnContainer.appendChild(buttonRow);
+    overlay.appendChild(btnContainer);
   } else {
     // 3. Ready Action Button
     const readyBtn = document.createElement('button');

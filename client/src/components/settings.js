@@ -243,6 +243,9 @@ export function toggleSettingsMenu(defaultTab = 'visuals', isStartConfirm = fals
             </button>
           ` : ''}
         `}
+        <button id="btn-settings-refresh" class="btn btn-secondary w-full py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 border border-slate-700/50">
+          🔄 Refresh Page (F5)
+        </button>
       </div>
     </div>
   `;
@@ -564,6 +567,14 @@ export function toggleSettingsMenu(defaultTab = 'visuals', isStartConfirm = fals
         });
       });
     }
+  }
+
+  const btnRefresh = menu.querySelector('#btn-settings-refresh');
+  if (btnRefresh) {
+    btnRefresh.addEventListener('click', () => {
+      logInteraction('Button Click: Refresh Page (F5)');
+      window.location.reload();
+    });
   }
 }
 

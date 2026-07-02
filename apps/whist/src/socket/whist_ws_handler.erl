@@ -202,7 +202,7 @@ send_error(Type, Reason) ->
     ErrorMap = #{
         ~"type" => ~"error",
         ~"error_type" => Type,
-        ~"reason" => io_lib:format("~p", [Reason])
+        ~"reason" => list_to_binary(io_lib:format("~p", [Reason]))
     },
     self() ! {send_state, json:encode(ErrorMap)}.
 

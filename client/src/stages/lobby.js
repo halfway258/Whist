@@ -116,6 +116,9 @@ function renderServerSelection(container) {
         <button id="btn-main-settings" class="btn btn-secondary text-base py-3.5 flex justify-center items-center gap-2">
           <span>⚙️</span> Game Settings
         </button>
+        <button id="btn-main-refresh" class="btn btn-secondary text-base py-3.5 flex justify-center items-center gap-2">
+          <span>🔄</span> Refresh Page (F5)
+        </button>
       </div>
     </div>
   `;
@@ -281,6 +284,14 @@ function renderServerSelection(container) {
     logInteraction('Button Click: Open Main Menu Settings');
     toggleSettingsMenu();
   });
+
+  const btnMainRefresh = card.querySelector('#btn-main-refresh');
+  if (btnMainRefresh) {
+    btnMainRefresh.addEventListener('click', () => {
+      logInteraction('Button Click: Refresh Page (F5) from Main Menu');
+      window.location.reload();
+    });
+  }
 }
 
 function renderRoomBrowser(container, state) {
@@ -296,8 +307,11 @@ function renderRoomBrowser(container, state) {
         <p class="text-slate-400 text-xs mt-0.5">Select a room to play or spectate games</p>
       </div>
       <div class="flex gap-2">
-        <button id="btn-refresh-rooms" class="btn btn-secondary text-xs !py-2 !px-3 flex items-center gap-1.5">
-          🔄 Refresh
+        <button id="btn-refresh-rooms" class="btn btn-secondary text-xs !py-2 !px-3 flex items-center gap-1.5" title="Refresh room list from server">
+          🔄 Refresh List
+        </button>
+        <button id="btn-reload-app" class="btn btn-secondary text-xs !py-2 !px-3 flex items-center gap-1.5" title="Reload application page (F5)">
+          🔄 Reload Page (F5)
         </button>
         <button id="btn-create-room" class="btn btn-primary text-xs !py-2 !px-3 flex items-center gap-1.5">
           <span>+</span> Create Room
@@ -400,6 +414,7 @@ function renderRoomBrowser(container, state) {
   const btnBack = card.querySelector('#btn-browser-back');
   const btnCreate = card.querySelector('#btn-create-room');
   const btnRefresh = card.querySelector('#btn-refresh-rooms');
+  const btnReload = card.querySelector('#btn-reload-app');
   const modal = card.querySelector('#password-modal');
   const modalCancel = card.querySelector('#btn-modal-cancel');
   const modalSubmit = card.querySelector('#btn-modal-submit');
@@ -478,6 +493,13 @@ function renderRoomBrowser(container, state) {
       }
     }, 3000);
   });
+
+  if (btnReload) {
+    btnReload.addEventListener('click', () => {
+      logInteraction('Button Click: Reload Page (F5) from Room Browser');
+      window.location.reload();
+    });
+  }
 
   // Wire Join and Spectate buttons
   card.querySelectorAll('.btn-join').forEach(btn => {
@@ -599,7 +621,10 @@ function renderWaitingRoom(players, container, state) {
       <!-- Header row containing title and settings button -->
       <div class="flex justify-between items-center w-full mb-3 pb-2 border-b border-slate-800/40">
         <h2 class="text-2xl font-black text-white tracking-wide">Waiting Room</h2>
-        <button id="btn-waiting-room-settings" class="btn btn-secondary text-xs !py-1 !px-2.5 flex items-center gap-1">⚙️ Settings</button>
+        <div class="flex gap-2">
+          <button id="btn-waiting-room-refresh" class="btn btn-secondary text-xs !py-1 !px-2.5 flex items-center gap-1">🔄 Refresh</button>
+          <button id="btn-waiting-room-settings" class="btn btn-secondary text-xs !py-1 !px-2.5 flex items-center gap-1">⚙️ Settings</button>
+        </div>
       </div>
 
       <div class="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-1 pulse-soft">
@@ -746,12 +771,30 @@ function renderWaitingRoom(players, container, state) {
   };
   window.addEventListener('whist_chat', window._chatListener);
 
+  const btnWaitingRefresh = card.querySelector('#btn-waiting-room-refresh');
+  if (btnWaitingRefresh) {
+    if (isSpectator) {
+      btnWaitingRefresh.disabled = true;
+      btnWaitingRefresh.classList.add('opacity-50', 'cursor-not-allowed');
+    } else {
+      btnWaitingRefresh.addEventListener('click', () => {
+        logInteraction('Button Click: Refresh Page (F5) from Waiting Room');
+        window.location.reload();
+      });
+    }
+  }
+
   // Wire buttons
   if (btnWaitingSettings) {
-    btnWaitingSettings.addEventListener('click', () => {
-      logInteraction('Button Click: Open Waiting Room Settings');
-      toggleSettingsMenu();
-    });
+    if (isSpectator) {
+      btnWaitingSettings.disabled = true;
+      btnWaitingSettings.classList.add('opacity-50', 'cursor-not-allowed');
+    } else {
+      btnWaitingSettings.addEventListener('click', () => {
+        logInteraction('Button Click: Open Waiting Room Settings');
+        toggleSettingsMenu();
+      });
+    }
   }
 
   if (btnExit) {
@@ -830,12 +873,17 @@ function renderWaitingRoom(players, container, state) {
 
   // Wire player card clicks to show statistics profile
   card.querySelectorAll('.player-card').forEach(el => {
-    el.addEventListener('click', () => {
-      const pId = el.dataset.id;
-      const pName = el.dataset.name;
-      logInteraction(`Button Click: View Player Profile ID: ${pId}, Name: ${pName}`);
-      showPlayerInfoModal(pId, pName);
-    });
+    if (isSpectator) {
+      el.classList.remove('cursor-pointer');
+      el.classList.add('cursor-default');
+    } else {
+      el.addEventListener('click', () => {
+        const pId = el.dataset.id;
+        const pName = el.dataset.name;
+        logInteraction(`Button Click: View Player Profile ID: ${pId}, Name: ${pName}`);
+        showPlayerInfoModal(pId, pName);
+      });
+    }
   });
 }
 

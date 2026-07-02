@@ -29,41 +29,50 @@ ready_next_round(PlayerId, Msg, State) ->
     
     case IsAllReady of
         true ->
-            %% Check if any human player voted to end (only relevant if target_rounds = 0)
-            AnyEndVote = lists:any(
-                fun(P) ->
-                    IsHuman = maps:get(~"bot", P, false) =:= false,
-                    IsHuman andalso maps:get(~"vote", P, ~"continue") =:= ~"end"
-                end,
-                NewPlayers
-            ),
-
             TargetRounds = maps:get(~"target_rounds", State#rules_state.settings, 0),
-            
-            GameOver = case TargetRounds of
-                0 -> AnyEndVote;
+            case TargetRounds of
+                0 ->
+                    %% Determine votes for all human players
+                    HumanVotes = [maps:get(~"vote", P, ~"continue") || P <- NewPlayers, maps:get(~"bot", P, false) =:= false],
+                    UniqueVotes = lists:usort(HumanVotes),
+                    case UniqueVotes of
+                        [~"end"] ->
+                            %% Unanimously voted to end game
+                            Winner = whist_utils:find_highest_score_player(NewPlayers),
+                            {ok, NewState#rules_state{stage = game_over, winner = Winner}};
+                        [~"continue"] ->
+                            %% Unanimously voted to continue playing
+                            ClearedPlayers = [P#{~"status" => ~"", ~"vote" => null} || P <- NewPlayers],
+                            {ok, NewState#rules_state{
+                                stage = dealing,
+                                round = State#rules_state.round + 1,
+                                players = ClearedPlayers
+                            }};
+                        _ ->
+                            %% Non-unanimous votes (disagreement): stay in round_end stage, do not progress
+                            {ok, NewState}
+                    end;
                 _ ->
                     EndCondition = maps:get(~"end_condition", State#rules_state.settings, ~"score"),
-                    case EndCondition of
+                    GameOver = case EndCondition of
                         ~"rounds" ->
                             State#rules_state.round >= TargetRounds;
                         _ ->
                             TargetScore = maps:get(~"target_score", State#rules_state.settings, State#rules_state.target_score),
                             lists:any(fun(P) -> maps:get(~"score", P) >= TargetScore end, NewPlayers)
+                    end,
+                    case GameOver of
+                        true ->
+                            Winner = whist_utils:find_highest_score_player(NewPlayers),
+                            {ok, NewState#rules_state{stage = game_over, winner = Winner}};
+                        false ->
+                            ClearedPlayers = [P#{~"status" => ~"", ~"vote" => null} || P <- NewPlayers],
+                            {ok, NewState#rules_state{
+                                stage = dealing,
+                                round = State#rules_state.round + 1,
+                                players = ClearedPlayers
+                            }}
                     end
-            end,
-            case GameOver of
-                true ->
-                    Winner = whist_utils:find_highest_score_player(NewPlayers),
-                    {ok, NewState#rules_state{stage = game_over, winner = Winner}};
-                false ->
-                    %% Transition to dealing next round
-                    ClearedPlayers = [P#{~"status" => ~"", ~"vote" => null} || P <- NewPlayers],
-                    {ok, NewState#rules_state{
-                        stage = dealing,
-                        round = State#rules_state.round + 1,
-                        players = ClearedPlayers
-                    }}
             end;
         false ->
             {ok, NewState}
