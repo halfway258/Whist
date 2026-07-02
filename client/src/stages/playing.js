@@ -58,7 +58,9 @@ export function renderPlaying(state, container) {
 
       if (seatIdx !== -1) {
         const player = players[seatIdx];
-        cell.className = 'flex flex-col items-center justify-center gap-1 w-20 h-28 relative';
+        cell.className = 'player-card-cell flex flex-col items-center justify-center gap-1 w-20 h-28 relative';
+        cell.dataset.playerId = player ? player.id : '';
+        cell.dataset.seatIndex = seatIdx;
 
         if (player) {
           const playedCard = getPlayedCardForPlayer(player.id);
@@ -106,7 +108,20 @@ export function renderPlaying(state, container) {
           return str.charAt(0).toUpperCase() + str.slice(1);
         };
 
-        if (tableCards.length > 0) {
+        if (state.last_trick && state.last_trick.length > 0) {
+          let leadHtml = '';
+          if (tableCards.length > 0) {
+            const leadSuit = tableCards[0].card.suit;
+            const symbol = getSuitSymbol(leadSuit);
+            leadHtml = `<span class="text-[8px] font-bold text-emerald-400/60 uppercase tracking-widest mb-1.5">${symbol} Lead</span>`;
+          }
+          cell.innerHTML = `
+            ${leadHtml}
+            <button id="btn-show-last-trick" class="glass-sm text-[9px] font-black uppercase tracking-wider text-slate-300 hover:text-amber-400 hover:border-amber-500/30 px-2.5 py-1.5 rounded-xl border border-slate-700/50 transition-all duration-200 cursor-help pointer-events-auto shadow-lg">
+              👁️ Last
+            </button>
+          `;
+        } else if (tableCards.length > 0) {
           const leadSuit = tableCards[0].card.suit;
           const symbol = getSuitSymbol(leadSuit);
           const name = capitalize(leadSuit);
@@ -209,5 +224,58 @@ export function renderPlaying(state, container) {
   });
 
   board.appendChild(handContainer);
+
+  // Hook up "Show Last Trick" button hover logic
+  const btnLastTrick = centerGrid.querySelector('#btn-show-last-trick');
+  if (btnLastTrick) {
+    const handleHoverStart = () => {
+      const playerCells = centerGrid.querySelectorAll('.player-card-cell');
+      playerCells.forEach(cellEl => {
+        const pId = cellEl.dataset.playerId;
+        const seatIdx = parseInt(cellEl.dataset.seatIndex, 10);
+        const player = players[seatIdx];
+        if (!player) return;
+
+        const lastPlayObj = state.last_trick.find(lt => lt.player_id === pId);
+        const lastCard = lastPlayObj ? lastPlayObj.card : null;
+
+        cellEl.innerHTML = '';
+        if (lastCard) {
+          const cardSvg = renderCard(lastCard, { small: true });
+          cardSvg.style.boxShadow = '0 6px 12px rgba(245, 158, 11, 0.4)';
+          cardSvg.style.opacity = '0.95';
+          cellEl.appendChild(cardSvg);
+
+          const badge = document.createElement('div');
+          badge.className = 'text-[9px] font-bold text-amber-400 uppercase mt-1 bg-slate-950/80 px-1.5 py-0.5 rounded border border-amber-500/20';
+          badge.textContent = `${seatIdx === 0 && !isSpectator ? 'You' : player.name} (Last)`;
+          cellEl.appendChild(badge);
+        } else {
+          cellEl.className = 'player-card-cell flex flex-col items-center justify-center gap-1 w-20 h-28 relative border-2 border-dashed border-slate-700/30 rounded-lg';
+          cellEl.innerHTML = `
+            <div class="text-[9px] font-black text-slate-600 uppercase text-center">
+              ${seatIdx === 0 && !isSpectator ? 'You' : player.name}
+            </div>
+          `;
+        }
+      });
+    };
+
+    const handleHoverEnd = () => {
+      renderPlaying(state, container);
+    };
+
+    btnLastTrick.addEventListener('mouseenter', handleHoverStart);
+    btnLastTrick.addEventListener('mouseleave', handleHoverEnd);
+    btnLastTrick.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      handleHoverStart();
+    });
+    btnLastTrick.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      handleHoverEnd();
+    });
+  }
+
   container.appendChild(board);
 }

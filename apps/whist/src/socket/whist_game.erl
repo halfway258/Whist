@@ -81,7 +81,8 @@ handle_call({join, ConnPid, Role}, _From, State) ->
             
             %% Send initial state to the spectator
             StateMap = whist_rules:make_state_map(State#game_session_state.rules_state, ~"spectator"),
-            ConnPid ! {send_state, json:encode(StateMap)},
+            StateMapWithRoom = StateMap#{~"room_id" => State#game_session_state.room_id},
+            ConnPid ! {send_state, json:encode(StateMapWithRoom)},
             
             {reply, ok, NewState};
         _ ->
@@ -112,10 +113,16 @@ handle_call({join, ConnPid, Role}, _From, State) ->
                             State#game_session_state.disconnect_timers
                     end,
 
-                    %% Set bot status back to false for reclaimed player
+                    %% Set bot status back to false for reclaimed player and clean name suffix
                     NewPlayers = lists:map(fun(P) ->
                         case maps:get(~"id", P) =:= ReclaimId of
-                            true -> P#{~"bot" => false};
+                            true ->
+                                Name = maps:get(~"name", P),
+                                CleanName = case binary:match(Name, ~" (Bot)") of
+                                    {Start, 6} -> binary:part(Name, 0, Start);
+                                    _ -> Name
+                                end,
+                                P#{~"bot" => false, ~"name" => CleanName};
                             false -> P
                         end
                     end, ExistingPlayers),
@@ -333,21 +340,30 @@ handle_cast({action, ~"start_game", ConnPid, _Msg}, State) ->
             case RulesState#rules_state.stage of
                 lobby ->
                     CurrentPlayers = RulesState#rules_state.players,
-                    NumPlayers = length(CurrentPlayers),
-                    whist_utils:log("whist_game (~s): starting game with ~p players. Filling with ~p bots.", [State#game_session_state.room_id, NumPlayers, 4 - NumPlayers]),
-                    BotsNeeded = 4 - NumPlayers,
-                    Bots = generate_bots(BotsNeeded, NumPlayers + 1),
-                    AllPlayers = CurrentPlayers ++ Bots,
-                    NewRulesState = RulesState#rules_state{
-                        players = AllPlayers,
-                        stage = dealing,
-                        round = 1
-                    },
-                    NewState = State#game_session_state{rules_state = NewRulesState},
-                    broadcast_state(NewState),
-                    whist_utils:log("whist_game (~s): Dealing phase started, scheduling start_betting", [State#game_session_state.room_id]),
-                    erlang:send_after(?DEALING_DELAY, self(), start_betting),
-                    {noreply, NewState};
+                    OtherPlayers = [P || P <- CurrentPlayers, maps:get(~"id", P) =/= ~"p1"],
+                    AllOthersReady = lists:all(fun(P) -> maps:get(~"status", P) =:= ~"Ready" end, OtherPlayers),
+                    case AllOthersReady of
+                        true ->
+                            NumPlayers = length(CurrentPlayers),
+                            whist_utils:log("whist_game (~s): starting game with ~p players. Filling with ~p bots.", [State#game_session_state.room_id, NumPlayers, 4 - NumPlayers]),
+                            BotsNeeded = 4 - NumPlayers,
+                            Bots = generate_bots(BotsNeeded, NumPlayers + 1),
+                            AllPlayers = CurrentPlayers ++ Bots,
+                            NewRulesState = RulesState#rules_state{
+                                players = AllPlayers,
+                                stage = dealing,
+                                round = 1
+                            },
+                            NewState = State#game_session_state{rules_state = NewRulesState},
+                            broadcast_state(NewState),
+                            whist_utils:log("whist_game (~s): Dealing phase started, scheduling start_betting", [State#game_session_state.room_id]),
+                            erlang:send_after(?DEALING_DELAY, self(), start_betting),
+                            {noreply, NewState};
+                        false ->
+                            whist_utils:log("whist_game (~s): start_game early rejected — not all human players are ready", [State#game_session_state.room_id]),
+                            send_error_to_player(~"p1", ~"cannot_start", ~"All connected players must ready up before starting.", State),
+                            {noreply, State}
+                    end;
                 _ ->
                     whist_utils:log("whist_game (~s): start_game early ignored since stage is ~p", [State#game_session_state.room_id, RulesState#rules_state.stage]),
                     {noreply, State}
@@ -612,6 +628,38 @@ handle_player_action(~"ready_next_round", PlayerId, _Msg, State) ->
             {noreply, State}
     end;
 
+handle_player_action(~"set_bot_mode", PlayerId, Msg, State) ->
+    BotVal = maps:get(~"bot", Msg, false),
+    whist_utils:log("whist_game (~s): Player ~s requests bot mode: ~p", [State#game_session_state.room_id, PlayerId, BotVal]),
+    RulesState = State#game_session_state.rules_state,
+    NewRulesState = case BotVal of
+        true ->
+            whist_rules:replace_with_bot(PlayerId, RulesState);
+        false ->
+            NewPlayers = lists:map(fun(P) ->
+                case maps:get(~"id", P) =:= PlayerId of
+                    true ->
+                        Name = maps:get(~"name", P),
+                        CleanName = case binary:match(Name, ~" (Bot)") of
+                            {Start, 6} -> binary:part(Name, 0, Start);
+                            _ -> Name
+                        end,
+                        P#{~"bot" => false, ~"name" => CleanName};
+                    false -> P
+                end
+            end, whist_rules:players(RulesState)),
+            RulesState#rules_state{players = NewPlayers}
+    end,
+    NewState = State#game_session_state{rules_state = NewRulesState},
+    broadcast_state(NewState),
+    case BotVal of
+        true ->
+            schedule_bot_action(NewRulesState);
+        false ->
+            ok
+    end,
+    {noreply, NewState};
+
 handle_player_action(~"return_menu", _PlayerId, _Msg, State) ->
     RulesState = State#game_session_state.rules_state,
     case whist_rules:stage(RulesState) =:= game_over of
@@ -678,6 +726,7 @@ broadcast_state(State) ->
     %% Save state changes to Mnesia database
     save_room_db(State),
     
+    RoomId = State#game_session_state.room_id,
     Players = whist_rules:players(State#game_session_state.rules_state),
     lists:foreach(
         fun(P) ->
@@ -685,7 +734,8 @@ broadcast_state(State) ->
             case maps:find(Id, State#game_session_state.connections) of
                 {ok, ConnPid} ->
                     StateMap = whist_rules:make_state_map(State#game_session_state.rules_state, Id),
-                    ConnPid ! {send_state, json:encode(StateMap)};
+                    StateMapWithRoom = StateMap#{~"room_id" => RoomId},
+                    ConnPid ! {send_state, json:encode(StateMapWithRoom)};
                 error ->
                     ok
             end
@@ -695,7 +745,8 @@ broadcast_state(State) ->
     lists:foreach(
         fun(SpecPid) ->
             StateMap = whist_rules:make_state_map(State#game_session_state.rules_state, ~"spectator"),
-            SpecPid ! {send_state, json:encode(StateMap)}
+            StateMapWithRoom = StateMap#{~"room_id" => RoomId},
+            SpecPid ! {send_state, json:encode(StateMapWithRoom)}
         end,
         State#game_session_state.spectators
     ).

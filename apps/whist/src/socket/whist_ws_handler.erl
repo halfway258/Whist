@@ -78,6 +78,10 @@ handle_action(#{~"action" := ~"client_log", ~"message" := Msg}, State) ->
     log_server_interaction(io_lib:format("Client Log: ~s", [Msg])),
     {ok, State};
 
+handle_action(#{~"action" := ~"ping"}, State) ->
+    self() ! {send_state, json:encode(#{~"type" => ~"pong"})},
+    {ok, State};
+
 handle_action(#{~"action" := ~"register", ~"username" := Username, ~"password" := Password}, State) ->
     Response = case whist_db:register_profile(Username, Password) of
         ok ->

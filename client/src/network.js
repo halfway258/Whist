@@ -5,6 +5,23 @@ let socket = null;
 let reconnectTimer = null;
 let reconnectDelay = 1000;
 const MAX_DELAY = 10000;
+let heartbeatInterval = null;
+
+function startHeartbeat() {
+  stopHeartbeat();
+  heartbeatInterval = setInterval(() => {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      send({ action: 'ping' });
+    }
+  }, 15000);
+}
+
+function stopHeartbeat() {
+  if (heartbeatInterval) {
+    clearInterval(heartbeatInterval);
+    heartbeatInterval = null;
+  }
+}
 
 /** @type {'disconnected'|'connecting'|'connected'} */
 let status = 'disconnected';
@@ -45,11 +62,14 @@ export function connect(url = 'ws://127.0.0.1:8080') {
 
   const activeSocket = socket;
 
+
+
   socket.addEventListener('open', () => {
     if (socket !== activeSocket) return;
     console.log('[Network] Connected');
     reconnectDelay = 1000; // reset backoff
     setStatus('connected');
+    startHeartbeat();
   });
 
   socket.addEventListener('message', (event) => {
@@ -68,6 +88,7 @@ export function connect(url = 'ws://127.0.0.1:8080') {
       return;
     }
     console.log(`[Network] Disconnected (code: ${event.code})`);
+    stopHeartbeat();
     setStatus('disconnected');
     scheduleReconnect(url);
   });
@@ -95,6 +116,7 @@ export function send(data) {
  */
 export function disconnect() {
   clearTimeout(reconnectTimer);
+  stopHeartbeat();
   if (socket) {
     socket.close();
     socket = null;

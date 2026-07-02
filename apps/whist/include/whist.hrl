@@ -35,6 +35,7 @@
     target_score = ?TARGET_SCORE :: integer(),
     current_turn = <<>> :: binary(),
     ready_players = [] :: [binary()],
+    last_trick = [] :: [map()],
     mode = online :: offline | online,
     settings = #{} :: map()
 }).

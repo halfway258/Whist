@@ -98,24 +98,11 @@ export function toggleSettingsMenu() {
             <input type="range" id="card-spacing-slider" min="15" max="60" value="${cardSpacing}" class="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500" />
           </div>
 
-          <!-- Table Felt Brightness Slider -->
-          <div class="flex flex-col gap-1.5">
-            <div class="flex justify-between items-center text-xs font-bold uppercase tracking-wide text-slate-300">
-              <span>Table Brightness</span>
-              <span id="brightness-val" class="font-mono text-amber-400 text-sm">${feltBrightness}%</span>
-            </div>
-            <input type="range" id="brightness-slider" min="30" max="200" value="${feltBrightness}" class="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500" />
-          </div>
-
           <!-- HUD Toggles -->
           <div class="flex flex-col gap-3 border-t border-slate-800/60 pt-4">
             <label class="flex items-center gap-3 cursor-pointer text-xs font-bold uppercase text-slate-300 select-none">
               <input type="checkbox" id="toggle-round-stats" class="accent-emerald-500 rounded" ${showRoundStats ? 'checked' : ''} />
               <span>Show Round Stats Badge</span>
-            </label>
-            <label class="flex items-center gap-3 cursor-pointer text-xs font-bold uppercase text-slate-300 select-none">
-              <input type="checkbox" id="toggle-opp-cards" class="accent-emerald-500 rounded" ${showOppCards ? 'checked' : ''} />
-              <span>Show Opponent Hand Counts</span>
             </label>
             <label class="flex items-center gap-3 cursor-pointer text-xs font-bold uppercase text-slate-300 select-none">
               <input type="checkbox" id="toggle-chat" class="accent-emerald-500 rounded" ${showChat ? 'checked' : ''} />
@@ -194,7 +181,7 @@ export function toggleSettingsMenu() {
               <span>Max Round Limit</span>
               <span id="rules-rounds-val" class="font-mono text-amber-400 text-sm">${gameSettings.target_rounds} rounds</span>
             </div>
-            <input type="range" id="rules-rounds-slider" min="3" max="20" value="${gameSettings.target_rounds}" class="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500" ${!canEditRules ? 'disabled' : ''} />
+            <input type="range" id="rules-rounds-slider" min="1" max="20" value="${gameSettings.target_rounds}" class="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500" ${!canEditRules ? 'disabled' : ''} />
           </div>
 
           <!-- Cards in Exchange -->
@@ -377,11 +364,8 @@ export function toggleSettingsMenu() {
   const textSizeVal = menu.querySelector('#text-size-val');
   const cardSpacingSlider = menu.querySelector('#card-spacing-slider');
   const cardSpacingVal = menu.querySelector('#card-spacing-val');
-  const brightnessSlider = menu.querySelector('#brightness-slider');
-  const brightnessVal = menu.querySelector('#brightness-val');
   
   const toggleRoundStats = menu.querySelector('#toggle-round-stats');
-  const toggleOppCards = menu.querySelector('#toggle-opp-cards');
   const toggleChat = menu.querySelector('#toggle-chat');
 
   const btnClose = menu.querySelector('#btn-settings-close');
@@ -417,25 +401,10 @@ export function toggleSettingsMenu() {
     updateState({ ...getState() });
   });
 
-  // Table brightness change
-  brightnessSlider.addEventListener('input', () => {
-    const val = brightnessSlider.value;
-    brightnessVal.textContent = `${val}%`;
-    localStorage.setItem('whist_felt_brightness', val);
-    document.documentElement.style.setProperty('--table-brightness', val / 100);
-    logInteraction(`Setting Changed: Table Brightness set to ${val}%`);
-  });
-
   // Toggle handlers
   toggleRoundStats.addEventListener('change', () => {
     localStorage.setItem('whist_show_round_stats', toggleRoundStats.checked);
     logInteraction(`Setting Changed: Show Round Stats Badge set to ${toggleRoundStats.checked}`);
-    updateState({ ...getState() });
-  });
-
-  toggleOppCards.addEventListener('change', () => {
-    localStorage.setItem('whist_show_opp_cards', toggleOppCards.checked);
-    logInteraction(`Setting Changed: Show Opponent Hand Counts set to ${toggleOppCards.checked}`);
     updateState({ ...getState() });
   });
 

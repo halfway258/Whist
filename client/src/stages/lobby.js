@@ -420,6 +420,11 @@ function renderRoomBrowser(container, state) {
     createSubmit.classList.add('btn-loading');
     window.showLoading('Creating Room...');
 
+    const state = getState() || {};
+    state.room_password = rPass || null;
+    state.room_role = 'player';
+    updateState(state);
+
     send({
       action: 'create_room',
       name: rName,
@@ -512,6 +517,11 @@ function renderRoomBrowser(container, state) {
 }
 
 function submitJoinRoom(roomId, password, role) {
+  const state = getState() || {};
+  state.room_password = password || null;
+  state.room_role = role || 'player';
+  updateState(state);
+
   // Send websocket payload
   send({
     action: 'join_room',
@@ -535,6 +545,9 @@ function renderWaitingRoom(players, container, state) {
   const localPlayer = players[0] || {};
   const isHostUser = localPlayer.id === 'p1';
   const isReadyUser = localPlayer.status === 'Ready';
+
+  const otherPlayers = players.slice(1);
+  const allOthersReady = otherPlayers.every(p => p.status === 'Ready');
 
   // Read game settings for active rule display
   const gameSettings = state.settings || {
@@ -620,7 +633,7 @@ function renderWaitingRoom(players, container, state) {
         <div class="flex gap-3 justify-center w-full mt-1">
           ${isHostUser ? `
             <button id="btn-close-room" class="btn btn-secondary text-xs flex-1 !py-2.5 !px-3 border border-rose-500/20 hover:border-rose-500/40 text-rose-300">Close Room</button>
-            <button id="btn-start-game" class="btn btn-primary text-xs flex-1 !py-2.5 !px-4">Start Game</button>
+            <button id="btn-start-game" class="btn btn-primary text-xs flex-1 !py-2.5 !px-4 ${!allOthersReady ? 'opacity-50 cursor-not-allowed' : ''}" ${!allOthersReady ? 'title="All connected players must ready up before starting."' : ''}>Start Game</button>
           ` : `
             <button id="btn-exit-room" class="btn btn-secondary text-xs flex-1 !py-2.5 !px-3">Exit Room</button>
             ${!isSpectator ? `<button id="btn-ready-room" class="btn btn-primary text-xs flex-1 !py-2.5 !px-4">${isReadyUser ? 'Unready' : 'Ready Up'}</button>` : ''}
@@ -757,6 +770,13 @@ function renderWaitingRoom(players, container, state) {
 
   if (btnStart) {
     btnStart.addEventListener('click', () => {
+      const currentOthers = (getState().players || []).slice(1);
+      const currentReady = currentOthers.every(p => p.status === 'Ready');
+      if (!currentReady) {
+        alert('Cannot start game: All other connected players must ready up first.');
+        return;
+      }
+
       logInteraction('Button Click: Start Game Early (with bots)');
       btnStart.disabled = true;
       btnStart.classList.add('btn-loading');

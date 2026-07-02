@@ -116,6 +116,7 @@ play_card(PlayerId, Card, State) ->
 %% @doc Clears the cards on the table after a trick completes.
 clear_trick(State) ->
     NewState = State#rules_state{
+        last_trick = State#rules_state.table_cards,
         table_cards = [],
         trick_winner = null
     },

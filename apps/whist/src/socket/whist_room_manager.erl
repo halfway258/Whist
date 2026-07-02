@@ -145,16 +145,23 @@ handle_cast({leave_room, RoomId, ConnPid}, State) ->
             %% If room is empty, we check if the game has started.
             %% If it is still in the lobby, we clean it up.
             %% If it has started, we keep the process alive so players can reconnect!
-            RulesState = gen_server:call(Room#room.game_pid, get_rules_state),
-            IsLobby = RulesState#rules_state.stage =:= lobby,
-            case {NewPlayers, IsLobby} of
-                {[], true} ->
-                    whist_utils:log("Room Manager: Room ~s is empty in lobby, stopping game pid ~p", [RoomId, Room#room.game_pid]),
-                    %% Stop the game process
-                    catch gen_server:stop(Room#room.game_pid),
+            RulesState = try gen_server:call(Room#room.game_pid, get_rules_state)
+                         catch _:_ -> dead
+                         end,
+            case RulesState of
+                dead ->
+                    whist_utils:log("Room Manager: Game pid ~p already stopped, cleaning up room ~s", [Room#room.game_pid, RoomId]),
                     maps:remove(RoomId, State#room_manager_state.rooms);
                 _ ->
-                    maps:put(RoomId, Room#room{players = NewPlayers}, State#room_manager_state.rooms)
+                    IsLobby = RulesState#rules_state.stage =:= lobby,
+                    case {NewPlayers, IsLobby} of
+                        {[], true} ->
+                            whist_utils:log("Room Manager: Room ~s is empty in lobby, stopping game pid ~p", [RoomId, Room#room.game_pid]),
+                            catch gen_server:stop(Room#room.game_pid),
+                            maps:remove(RoomId, State#room_manager_state.rooms);
+                        _ ->
+                            maps:put(RoomId, Room#room{players = NewPlayers}, State#room_manager_state.rooms)
+                    end
             end;
         error ->
             whist_utils:log("Room Manager: Room ~s not found for leave request", [RoomId]),

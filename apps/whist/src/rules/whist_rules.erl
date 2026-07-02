@@ -181,6 +181,7 @@ make_state_map(State, ViewerId) ->
         ~"players" => RotatedPlayers,
         ~"my_hand" => Hand,
         ~"table_cards" => State#rules_state.table_cards,
+        ~"last_trick" => State#rules_state.last_trick,
         ~"prompt_data" => State#rules_state.prompt_data,
         ~"trick_winner" => State#rules_state.trick_winner,
         ~"winner" => WinnerFormatted,

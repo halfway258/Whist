@@ -32,10 +32,6 @@ export function renderHUD(state, container) {
   }
 
   statusContainer.innerHTML = `
-    <div class="glass-sm px-2 py-1 md:px-3 md:py-1.5 flex items-center gap-1.5 md:gap-2">
-      <span class="${dotClass}"></span>
-      <span class="text-[10px] md:text-xs font-semibold text-slate-300">${statusText}</span>
-    </div>
     <button id="btn-settings" class="btn btn-secondary text-[10px] md:text-xs !py-1 md:!py-1.5 !px-2 md:!px-3 flex items-center gap-1">
       ⚙️ Menu
     </button>
@@ -75,7 +71,7 @@ export function renderHUD(state, container) {
     const trumpText = gameStats.trump_suit && gameStats.trump_suit !== 'no_trump' ? ` | Trump: ${capitalize(gameStats.trump_suit)} ${getSuitSymbol(gameStats.trump_suit)}` : (gameStats.trump_suit === 'no_trump' ? ' | Trump: NT' : '');
 
     roundBadge.innerHTML = `
-      <div class="text-[8px] md:text-[9px] text-slate-400 font-bold uppercase tracking-wider">Israeli Whist${playStyleText}${trumpText}</div>
+      <div class="text-[8px] md:text-[9px] text-slate-400 font-bold uppercase tracking-wider">${playStyleText}${trumpText}</div>
       <div class="text-sm md:text-xl font-black text-white font-mono leading-none mt-1">Round ${gameStats.round}${biddingStageText}</div>
       <div class="text-[9px] md:text-[10px] text-amber-400 font-semibold mt-0.5 md:mt-1">Target: ${gameStats.target_score}</div>
     `;
@@ -162,7 +158,7 @@ export function renderHUD(state, container) {
       `;
     }
 
-    const showOppCards = localStorage.getItem('whist_show_opp_cards') !== 'false';
+    const showOppCards = false;
     const showHandSim = (showOppCards || state.is_spectator === true) && (currentStage === 'PLAYING' || currentStage === 'BETTING') && !isLocal;
 
     // Render opponent hand count badge directly in the cardBody on mobile
